@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
 import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle } from 'lucide-react';
-import { mockDb } from '../services/mockStore';
+import { db } from '../services/database';
 
 interface ExamInterfaceProps {
   user: User;
@@ -158,7 +158,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       submittedAt: new Date().toISOString()
     };
 
-    await mockDb.submitResult(result);
+    await db.submitResult(result);
     setShowScoreModal(true);
   };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, AppSettings } from '../types';
-import { mockDb } from '../services/mockStore';
+import { db } from '../services/database';
 import { GraduationCap, UserCircle, RefreshCcw, Lock } from 'lucide-react';
 import { BackgroundShapes } from './BackgroundShapes';
 
@@ -29,7 +29,7 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    mockDb.getExams(selectedLevel).then(setAvailableExams);
+    db.getExams(selectedLevel).then(setAvailableExams);
   }, [selectedLevel]);
 
   const handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

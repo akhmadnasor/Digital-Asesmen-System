@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam } from '../types';
-import { mockDb } from '../services/mockStore';
+import { db } from '../services/database';
 import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, Image as ImageIcon, Type, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -36,15 +36,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   }, [appName]);
 
   const loadData = async () => {
-    const e = await mockDb.getExams();
-    const u = await mockDb.getUsers();
+    const e = await db.getExams();
+    const u = await db.getUsers();
     setExams(e);
     setUsers(u.filter(x => x.role === 'STUDENT'));
   };
 
   const handleUpdateToken = async (examId: string) => {
       if(newToken.length < 3) return alert("Token terlalu pendek");
-      await mockDb.updateExamToken(examId, newToken.toUpperCase());
+      await db.updateExamToken(examId, newToken.toUpperCase());
       setEditingTokenId(null);
       setNewToken('');
       loadData();
@@ -52,7 +52,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
   const handleResetUser = async (userId: string) => {
       if(confirm("Reset status login peserta ini?")) {
-          await mockDb.resetUserStatus(userId);
+          await db.resetUserStatus(userId);
           alert("Peserta berhasil di-reset.");
           loadData();
       }
@@ -68,7 +68,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
   const handleSaveAppName = async () => {
       if (newAppName.trim().length > 0) {
-          await mockDb.updateSettings({ appName: newAppName });
+          await db.updateSettings({ appName: newAppName });
           onSettingsChange();
           alert("Nama Aplikasi berhasil diperbarui!");
       }

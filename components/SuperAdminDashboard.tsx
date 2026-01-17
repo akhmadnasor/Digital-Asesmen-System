@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, AppSettings } from '../types';
-import { mockDb } from '../services/mockStore';
+import { db } from '../services/database';
 import { Users, LogOut, Shield, UserPlus, Trash2, Edit, Search, LayoutDashboard, Palette, Save, AlertTriangle, Speaker, Clock, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface Props {
@@ -38,12 +38,12 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
     }, []);
 
     const loadData = () => {
-        mockDb.getUsers().then(setUsers);
+        db.getUsers().then(setUsers);
     };
 
     const handleDeleteUser = async (id: string) => {
         if (confirm('Apakah Anda yakin ingin menghapus user ini?')) {
-            await mockDb.deleteUser(id);
+            await db.deleteUser(id);
             loadData();
         }
     };
@@ -58,7 +58,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
             nisn: newNisn,
             grade: newUserRole === UserRole.STUDENT ? 6 : undefined
         };
-        await mockDb.addUser(newUser);
+        await db.addUser(newUser);
         setIsAddModalOpen(false);
         setNewName('');
         setNewUsername('');
@@ -74,7 +74,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
     };
 
     const handleSaveTheme = async () => {
-        await mockDb.updateSettings({
+        await db.updateSettings({
             themeColor: primaryColor,
             gradientEndColor: gradientEnd,
             logoStyle: logoStyle,
@@ -85,7 +85,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
     };
 
     const handleSaveAntiCheat = async () => {
-        await mockDb.updateSettings({
+        await db.updateSettings({
             antiCheat: {
                 isActive: acActive,
                 freezeDurationSeconds: acFreeze,

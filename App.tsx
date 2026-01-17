@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Exam, AppSettings } from './types';
-import { mockDb } from './services/mockStore';
+import { db } from './services/database';
 import { ExamInterface } from './components/ExamInterface';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
@@ -18,7 +18,7 @@ const App: React.FC = () => {
   
   // App Settings State
   const [settings, setSettings] = useState<AppSettings>({
-    appName: 'CBT MANDIRI BEJI',
+    appName: 'Digital Assessment System',
     themeColor: '#2459a9',
     gradientEndColor: '#60a5fa',
     logoStyle: 'circle',
@@ -30,7 +30,7 @@ const App: React.FC = () => {
   }, []);
 
   const loadSettings = async () => {
-    const s = await mockDb.getSettings();
+    const s = await db.getSettings();
     setSettings(s);
   };
 
@@ -41,13 +41,15 @@ const App: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Mimic password check (any password works for mock)
-    const user = await mockDb.login(loginInput);
+    
+    // Check against DB with password
+    const user = await db.login(loginInput, passwordInput);
+    
     setLoading(false);
     if (user) {
       setCurrentUser(user);
     } else {
-      alert('Data tidak ditemukan. Pastikan NISN (Siswa) atau Username (Admin) benar.');
+      alert('Data tidak ditemukan atau Password salah. \nPastikan Username dan Password benar.');
     }
   };
 

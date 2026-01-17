@@ -15,7 +15,7 @@
               display: ['Nunito', 'sans-serif'],
             },
             colors: {
-              'pusmendik-blue': '#2459a9', // The primary header blue
+              'pusmendik-blue': '#2459a9',
               'pusmendik-dark': '#1a407a',
               'pusmendik-light': '#f3f7fc',
               'btn-primary': '#0d6efd',
@@ -87,7 +87,6 @@
         .print-only {
           display: block !important;
         }
-        /* Ensure grid works in print */
         .print-grid {
           display: grid !important;
           grid-template-columns: repeat(2, 1fr) !important;
@@ -101,16 +100,20 @@
   <script type="importmap">
 {
   "imports": {
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
+    "vite": "https://esm.sh/vite@^7.3.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.1"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
