@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, AppSettings } from '../types';
 import { db } from '../services/database';
-import { Users, LogOut, Shield, UserPlus, Trash2, Edit, Search, LayoutDashboard, Palette, Save, AlertTriangle, Speaker, Clock, Upload, Image as ImageIcon } from 'lucide-react';
+import { Users, LogOut, Shield, UserPlus, Trash2, Edit, Search, LayoutDashboard, Palette, Save, AlertTriangle, Speaker, Clock, Upload, Image as ImageIcon, Link } from 'lucide-react';
 
 interface Props {
     user: User;
@@ -18,7 +18,7 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
     // Theme State
     const [primaryColor, setPrimaryColor] = useState(settings.themeColor);
     const [gradientEnd, setGradientEnd] = useState(settings.gradientEndColor);
-    const [logoStyle, setLogoStyle] = useState<'circle' | 'rect_4_3'>(settings.logoStyle);
+    const [logoStyle, setLogoStyle] = useState<'circle' | 'rect_4_3' | 'rect_3_4_vert'>(settings.logoStyle);
     const [logoUrl, setLogoUrl] = useState<string | undefined>(settings.schoolLogoUrl);
 
     // Anti Cheat State
@@ -95,6 +95,15 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
         });
         onSettingsChange();
         alert("Pengaturan Anti-Kecurangan berhasil disimpan!");
+    };
+
+    const getPreviewContainerClass = () => {
+        switch(logoStyle) {
+            case 'circle': return 'w-24 h-24 rounded-full';
+            case 'rect_4_3': return 'w-32 h-24 rounded-lg';
+            case 'rect_3_4_vert': return 'w-24 h-32 rounded-lg';
+            default: return 'w-24 h-24 rounded-full';
+        }
     };
 
     const NavItem = ({ id, label, icon: Icon }: { id: typeof activeTab, label: string, icon: any }) => (
@@ -215,44 +224,66 @@ export const SuperAdminDashboard: React.FC<Props> = ({ user, onLogout, settings,
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-2xl">
                             
                             <div className="mb-8 border-b pb-6">
-                                <label className="block text-sm font-bold text-gray-700 mb-3">Logo Aplikasi (Custom)</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-3">Logo Sekolah</label>
                                 <div className="flex items-start gap-6">
-                                    <div className="flex-shrink-0">
-                                        <div className={`flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 overflow-hidden ${logoStyle === 'circle' ? 'w-24 h-24 rounded-full' : 'w-32 h-24 rounded-lg'}`}>
+                                    <div className="flex-shrink-0 flex flex-col items-center">
+                                        <div className={`flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 overflow-hidden shadow-sm ${getPreviewContainerClass()}`}>
                                             {logoUrl ? (
-                                                <img src={logoUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                <img src={logoUrl} alt="Preview" className="w-full h-full object-contain bg-white" />
                                             ) : (
                                                 <ImageIcon className="text-gray-400 w-8 h-8" />
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-gray-400 mt-2 text-center">Preview ({logoStyle})</p>
+                                        <p className="text-[10px] text-gray-400 mt-2 text-center uppercase tracking-wide">Preview Mode</p>
                                     </div>
                                     <div className="flex-1 space-y-4">
+                                        {/* File Upload */}
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Upload Gambar Baru</label>
-                                            <div className="flex gap-2">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Upload File (Gambar)</label>
+                                            <input 
+                                                type="file" 
+                                                accept="image/*"
+                                                onChange={handleLogoUpload}
+                                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition border border-gray-200 rounded-lg p-1" 
+                                            />
+                                        </div>
+                                        
+                                        {/* URL Input */}
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Atau Gunakan URL Gambar</label>
+                                            <div className="relative">
+                                                <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                                                 <input 
-                                                    type="file" 
-                                                    accept="image/*"
-                                                    onChange={handleLogoUpload}
-                                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+                                                    type="text"
+                                                    value={logoUrl || ''}
+                                                    onChange={(e) => setLogoUrl(e.target.value)}
+                                                    placeholder="https://example.com/logo.png"
+                                                    className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-gray-700"
                                                 />
                                             </div>
                                         </div>
+
+                                        {/* Style Selection */}
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Bentuk Logo</label>
-                                            <div className="flex gap-3">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Bentuk Frame Logo</label>
+                                            <div className="flex gap-2 flex-wrap">
                                                 <button 
                                                     onClick={() => setLogoStyle('circle')}
-                                                    className={`px-3 py-1.5 rounded text-xs font-bold border transition ${logoStyle === 'circle' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-300 text-gray-600'}`}
+                                                    className={`px-3 py-1.5 rounded text-xs font-bold border transition ${logoStyle === 'circle' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                                                 >
                                                     Circle (Bulat)
                                                 </button>
                                                 <button 
                                                     onClick={() => setLogoStyle('rect_4_3')}
-                                                    className={`px-3 py-1.5 rounded text-xs font-bold border transition ${logoStyle === 'rect_4_3' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-300 text-gray-600'}`}
+                                                    className={`px-3 py-1.5 rounded text-xs font-bold border transition ${logoStyle === 'rect_4_3' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                                                 >
                                                     Persegi (4:3)
+                                                </button>
+                                                <button 
+                                                    onClick={() => setLogoStyle('rect_3_4_vert')}
+                                                    className={`px-3 py-1.5 rounded text-xs font-bold border transition ${logoStyle === 'rect_3_4_vert' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                                >
+                                                    Vertikal (3:4)
                                                 </button>
                                             </div>
                                         </div>

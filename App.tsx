@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Exam, AppSettings } from './types';
 import { db } from './services/database';
+import { cacheManager } from './utils/cache'; // Import Cache Manager
 import { ExamInterface } from './components/ExamInterface';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
@@ -26,6 +27,8 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
+    // Jalankan pembersihan cache otomatis saat aplikasi dimuat
+    cacheManager.initialize();
     loadSettings();
   }, []);
 
@@ -54,6 +57,9 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    // Bersihkan sesi saat logout
+    cacheManager.clearSession();
+    
     setCurrentUser(null);
     setActiveExam(null);
     setLoginInput('');
@@ -75,14 +81,20 @@ const App: React.FC = () => {
     background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  // Logo Style Classes
-  const logoClasses = settings.logoStyle === 'circle' 
-    ? 'rounded-full object-cover w-full h-full' 
-    : 'rounded-lg object-contain w-full h-full';
-
-  const containerClasses = settings.logoStyle === 'circle' 
-    ? 'rounded-full w-24 h-24' 
-    : 'rounded-xl w-32 h-24';
+  // Logo Style Logic (Updated for better fit and new vertical ratio)
+  const getContainerClasses = () => {
+    switch(settings.logoStyle) {
+      case 'rect_3_4_vert': return 'rounded-xl w-24 h-32';
+      case 'rect_4_3': return 'rounded-xl w-32 h-24';
+      default: return 'rounded-full w-24 h-24';
+    }
+  };
+  
+  const getLogoImageClasses = () => {
+      return settings.logoStyle === 'circle' 
+        ? 'rounded-full object-cover w-full h-full bg-white' // Circle keeps object-cover usually
+        : 'rounded-lg object-contain w-full h-full bg-white'; // Rects use contain to fit logo
+  };
 
   // --- VIEW: LOGIN (Halaman 1) ---
   if (!currentUser) {
@@ -111,10 +123,10 @@ const App: React.FC = () => {
             <div className="bg-white/95 backdrop-blur-sm p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md relative z-10 border border-white/50 animate-in zoom-in-95 duration-500">
             
             <div className="flex justify-center mb-6">
-                <div className={`p-4 shadow-lg ring-4 ring-blue-50 bg-white flex items-center justify-center ${containerClasses}`} style={{ background: `linear-gradient(to top right, ${settings.themeColor}, ${settings.gradientEndColor})` }}>
+                <div className={`p-4 shadow-lg ring-4 ring-blue-50 bg-white flex items-center justify-center transition-all ${getContainerClasses()}`} style={{ background: `linear-gradient(to top right, ${settings.themeColor}, ${settings.gradientEndColor})` }}>
                      {settings.schoolLogoUrl ? (
-                        <div className={`overflow-hidden flex items-center justify-center bg-white ${settings.logoStyle === 'circle' ? 'rounded-full w-full h-full' : 'rounded w-full h-full'}`}>
-                            <img src={settings.schoolLogoUrl} className={logoClasses} alt="School Logo" />
+                        <div className={`overflow-hidden flex items-center justify-center bg-white w-full h-full ${settings.logoStyle === 'circle' ? 'rounded-full' : 'rounded'}`}>
+                            <img src={settings.schoolLogoUrl} className={getLogoImageClasses()} alt="School Logo" />
                         </div>
                      ) : (
                         <School className="text-white w-10 h-10" />

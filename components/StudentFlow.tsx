@@ -90,13 +90,20 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
       background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  const logoContainerClasses = settings.logoStyle === 'circle' 
-    ? 'rounded-full w-24 h-24' 
-    : 'rounded-xl w-32 h-24';
-  
-  const logoImgClasses = settings.logoStyle === 'circle'
-    ? 'rounded-full w-full h-full object-cover'
-    : 'rounded w-full h-full object-contain bg-white';
+  // Logo Container Logic
+  const getLogoContainerClasses = () => {
+      switch(settings.logoStyle) {
+          case 'rect_3_4_vert': return 'rounded-xl w-24 h-32';
+          case 'rect_4_3': return 'rounded-xl w-32 h-24';
+          default: return 'rounded-full w-24 h-24';
+      }
+  };
+
+  const getLogoImageClasses = () => {
+    return settings.logoStyle === 'circle'
+      ? 'rounded-full w-full h-full object-cover bg-white'
+      : 'rounded w-full h-full object-contain bg-white';
+  };
 
   // --- VIEW 1: DASHBOARD (Halaman 2) ---
   if (step === 'DASHBOARD') {
@@ -113,16 +120,16 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg text-center animate-in zoom-in-95 duration-500 z-10">
-             <div className={`flex items-center justify-center mx-auto mb-6 -mt-16 ring-4 ring-white shadow-md ${logoContainerClasses}`} style={{ backgroundColor: settings.themeColor }}>
+        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg text-center animate-in zoom-in-95 duration-500 z-10 relative mt-12">
+             <div className={`flex items-center justify-center mx-auto absolute left-1/2 -translate-x-1/2 -top-12 ring-4 ring-white shadow-md ${getLogoContainerClasses()}`} style={{ backgroundColor: settings.themeColor }}>
                 {settings.schoolLogoUrl ? (
-                    <img src={settings.schoolLogoUrl} className={logoImgClasses} alt="Logo" />
+                    <img src={settings.schoolLogoUrl} className={getLogoImageClasses()} alt="Logo" />
                 ) : (
                     <GraduationCap className="text-white w-10 h-10" />
                 )}
              </div>
              
-             <h2 className="text-2xl font-bold text-gray-800 mb-2">Simulasi TKA</h2>
+             <h2 className="text-2xl font-bold text-gray-800 mb-2 mt-12">Simulasi TKA</h2>
              <p className="text-gray-500 mb-6 text-sm">Pilih jenjang dan mata pelajaran untuk memulai simulasi</p>
 
              {/* User Info "Menu" */}

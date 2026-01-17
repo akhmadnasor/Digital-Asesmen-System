@@ -31,7 +31,7 @@ export const db = {
     return {
         appName: data.app_name,
         schoolLogoUrl: data.school_logo_url,
-        logoStyle: data.logo_style as 'circle' | 'rect_4_3',
+        logoStyle: data.logo_style as 'circle' | 'rect_4_3' | 'rect_3_4_vert',
         themeColor: data.theme_color,
         gradientEndColor: data.gradient_end_color,
         antiCheat: data.anti_cheat

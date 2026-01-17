@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam } from '../types';
 import { db } from '../services/database';
-import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, Image as ImageIcon, Type, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock } from 'lucide-react';
+import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, Image as ImageIcon, Type, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: User;
@@ -22,6 +22,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   
   // Settings State
   const [customLogo, setCustomLogo] = useState<string | null>(null);
+  const [logoUrlInput, setLogoUrlInput] = useState('');
   const [newAppName, setNewAppName] = useState(appName);
   
   // Print Settings
@@ -33,6 +34,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   useEffect(() => {
     loadData();
     setNewAppName(appName);
+    // Load existing settings to populate local state if needed
+    db.getSettings().then(s => {
+        setCustomLogo(s.schoolLogoUrl || null);
+        setLogoUrlInput(s.schoolLogoUrl || '');
+    });
   }, [appName]);
 
   const loadData = async () => {
@@ -62,15 +68,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       if (e.target.files && e.target.files[0]) {
           const url = URL.createObjectURL(e.target.files[0]);
           setCustomLogo(url);
-          alert("Logo berhasil diperbarui (Simulasi)");
+          setLogoUrlInput(url);
       }
   };
 
   const handleSaveAppName = async () => {
       if (newAppName.trim().length > 0) {
-          await db.updateSettings({ appName: newAppName });
+          await db.updateSettings({ appName: newAppName, schoolLogoUrl: logoUrlInput });
           onSettingsChange();
-          alert("Nama Aplikasi berhasil diperbarui!");
+          alert("Pengaturan berhasil diperbarui!");
       }
   };
 
@@ -493,7 +499,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                         <div className="bg-white border-b border-gray-200 p-3 flex items-center space-x-3 print:border-gray-800" style={{ borderTop: `4px solid ${themeColor}` }}>
                                             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center print:border print:border-gray-300">
                                                 {customLogo ? 
-                                                    <img src={customLogo} className="w-8 h-8 object-contain" /> : 
+                                                    <img src={customLogo} className="w-full h-full object-contain" /> : 
                                                     <ImageIcon className="text-gray-400" size={20}/>
                                                 }
                                             </div>
@@ -571,9 +577,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                 <div className="w-24 h-24 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
                                     {customLogo ? <img src={customLogo} className="w-full h-full object-contain p-2" /> : <ImageIcon className="text-gray-300" />}
                                 </div>
-                                <div>
-                                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition mb-1" />
-                                    <span className="text-xs text-gray-400">Max 2MB (PNG/JPG)</span>
+                                <div className="space-y-3 flex-1">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Upload File</label>
+                                        <input type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition mb-1" />
+                                        <span className="text-xs text-gray-400">Max 2MB (PNG/JPG)</span>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Atau URL Gambar</label>
+                                        <div className="relative">
+                                            <Link className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                                            <input 
+                                                value={logoUrlInput}
+                                                onChange={(e) => {
+                                                    setLogoUrlInput(e.target.value);
+                                                    setCustomLogo(e.target.value);
+                                                }}
+                                                className="w-full pl-9 pr-3 py-2 border rounded text-xs focus:ring-1 outline-none"
+                                                placeholder="https://..."
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                           </div>
                       </div>

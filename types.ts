@@ -1,3 +1,4 @@
+
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
@@ -65,10 +66,10 @@ export interface AntiCheatConfig {
 export interface AppSettings {
   appName: string;
   schoolLogoUrl?: string;
-  logoStyle: 'circle' | 'rect_4_3'; // New Logo Style Option
+  logoStyle: 'circle' | 'rect_4_3' | 'rect_3_4_vert'; // Added 3:4 Vertical
   themeColor: string; 
   gradientEndColor: string; 
-  antiCheat: AntiCheatConfig; // New Anti-Cheat Settings
+  antiCheat: AntiCheatConfig; 
 }
 
 export interface AppState {
