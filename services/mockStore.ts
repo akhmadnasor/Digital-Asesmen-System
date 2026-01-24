@@ -112,20 +112,6 @@ let MOCK_EXAMS: Exam[] = [
     questions: [
       { id: 'q1', type: 'PG', text: 'Sinonim dari kata "Indah" adalah...', options: ['Jelek', 'Buruk', 'Cantik', 'Kotor'], correctIndex: 2, points: 10 },
     ]
-  },
-  {
-    id: 'ex-smp-mat',
-    title: 'Matematika - SMP Sederajat',
-    subject: 'Matematika',
-    educationLevel: 'SMP',
-    durationMinutes: 90,
-    isActive: true,
-    token: 'SMP123',
-    startDate: tomorrow.toISOString(), // Upcoming
-    endDate: new Date(tomorrow.getTime() + 86400000).toISOString(),
-    questions: [
-      { id: 'q1', type: 'PG', text: 'Akar kuadrat dari 144 adalah...', options: ['10', '11', '12', '13'], correctIndex: 2, points: 10 },
-    ]
   }
 ];
 
@@ -151,7 +137,7 @@ export const mockDb = {
     });
   },
 
-  getExams: async (level?: 'SD' | 'SMP'): Promise<Exam[]> => {
+  getExams: async (level?: 'SD'): Promise<Exam[]> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         if (level) {

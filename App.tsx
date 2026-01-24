@@ -7,7 +7,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
 import { StudentFlow } from './components/StudentFlow';
 import { BackgroundShapes } from './components/BackgroundShapes';
-import { LogIn, School, Lock, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Lock, Eye, EyeOff } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -19,7 +19,7 @@ const App: React.FC = () => {
   
   // App Settings State
   const [settings, setSettings] = useState<AppSettings>({
-    appName: 'Digital Assessment System',
+    appName: 'UJI TKA MANDIRI',
     themeColor: '#2459a9',
     gradientEndColor: '#60a5fa',
     logoStyle: 'circle',
@@ -81,21 +81,6 @@ const App: React.FC = () => {
     background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  // Logo Style Logic (Updated for better fit and new vertical ratio)
-  const getContainerClasses = () => {
-    switch(settings.logoStyle) {
-      case 'rect_3_4_vert': return 'rounded-xl w-24 h-32';
-      case 'rect_4_3': return 'rounded-xl w-32 h-24';
-      default: return 'rounded-full w-24 h-24';
-    }
-  };
-  
-  const getLogoImageClasses = () => {
-      return settings.logoStyle === 'circle' 
-        ? 'rounded-full object-cover w-full h-full bg-white' // Circle keeps object-cover usually
-        : 'rounded-lg object-contain w-full h-full bg-white'; // Rects use contain to fit logo
-  };
-
   // --- VIEW: LOGIN (Halaman 1) ---
   if (!currentUser) {
     return (
@@ -112,7 +97,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-xl font-extrabold text-white tracking-wide drop-shadow-sm">{settings.appName}</h1>
-                        <p className="text-xs text-blue-100 opacity-90">Digital Assessment System (DAS)</p>
+                        <p className="text-xs text-blue-100 opacity-90">Digital Assessment System (DAS) - Jenjang SD</p>
                     </div>
                 </div>
             </div>
@@ -123,19 +108,16 @@ const App: React.FC = () => {
             <div className="bg-white/95 backdrop-blur-sm p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md relative z-10 border border-white/50 animate-in zoom-in-95 duration-500">
             
             <div className="flex justify-center mb-6">
-                <div className={`p-4 shadow-lg ring-4 ring-blue-50 bg-white flex items-center justify-center transition-all ${getContainerClasses()}`} style={{ background: `linear-gradient(to top right, ${settings.themeColor}, ${settings.gradientEndColor})` }}>
-                     {settings.schoolLogoUrl ? (
-                        <div className={`overflow-hidden flex items-center justify-center bg-white w-full h-full ${settings.logoStyle === 'circle' ? 'rounded-full' : 'rounded'}`}>
-                            <img src={settings.schoolLogoUrl} className={getLogoImageClasses()} alt="School Logo" />
-                        </div>
-                     ) : (
-                        <School className="text-white w-10 h-10" />
-                     )}
-                </div>
+                 {/* Updated Logo: No Frame, Custom URL, Floating Animation */}
+                 <img 
+                    src="https://i.imghippo.com/files/xYek7566NhY.png" 
+                    className="w-40 h-auto object-contain animate-float-slow filter drop-shadow-xl" 
+                    alt="Logo Uji TKA Mandiri" 
+                 />
             </div>
             
             <h2 className="text-2xl font-bold text-center text-gray-800 mb-1">Selamat Datang</h2>
-            <p className="text-gray-500 text-center mb-8 text-sm">Digital Assessment System (DAS)</p>
+            <p className="text-gray-500 text-center mb-8 text-sm">Silakan login untuk memulai ujian</p>
 
             <form onSubmit={handleLogin} className="space-y-5">
                 <div>

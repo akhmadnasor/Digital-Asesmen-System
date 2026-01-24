@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
 import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle } from 'lucide-react';
@@ -13,13 +13,26 @@ interface ExamInterfaceProps {
   settings: AppSettings;
 }
 
+// Fisher-Yates Shuffle Algorithm
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComplete, appName, themeColor, settings }) => {
+  // Initialize Randomized Questions ONLY ONCE on mount
+  const [activeQuestions] = useState<Question[]>(() => shuffleArray(exam.questions));
+  
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
   // State for different answer types
-  const [answers, setAnswers] = useState<any[]>(new Array(exam.questions.length).fill(null));
+  const [answers, setAnswers] = useState<any[]>(new Array(activeQuestions.length).fill(null));
   
-  const [markedDoubts, setMarkedDoubts] = useState<boolean[]>(new Array(exam.questions.length).fill(false));
+  const [markedDoubts, setMarkedDoubts] = useState<boolean[]>(new Array(activeQuestions.length).fill(false));
   const [timeLeft, setTimeLeft] = useState(exam.durationMinutes * 60);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
   const [cheatingAttempts, setCheatingAttempts] = useState(0);
@@ -123,9 +136,10 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
 
   const calculateScore = () => {
       let score = 0;
-      exam.questions.forEach((q, idx) => {
+      // Calculate based on ACTIVE (Randomized) Questions
+      activeQuestions.forEach((q, idx) => {
           const answer = answers[idx];
-          if (!answer) return;
+          if (answer === null || answer === undefined) return;
 
           if (q.type === 'PG' && answer === q.correctIndex) {
               score += q.points;
@@ -153,7 +167,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       examId: exam.id,
       examTitle: exam.title,
       score,
-      totalQuestions: exam.questions.length,
+      totalQuestions: activeQuestions.length,
       cheatingAttempts,
       submittedAt: new Date().toISOString()
     };
@@ -162,7 +176,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
     setShowScoreModal(true);
   };
 
-  const currentQ = exam.questions[currentQuestionIndex];
+  const currentQ = activeQuestions[currentQuestionIndex];
   
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -183,9 +197,10 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   const renderAnswerInput = (q: Question) => {
       if (q.type === 'PG') {
           return (
-            <div className="flex flex-col space-y-3">
+            // Modified: Grid layout 1 column on mobile, 2 columns on md+ screens
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {q.options?.map((opt, idx) => (
-                    <label key={idx} className="cursor-pointer group flex items-start">
+                    <label key={idx} className="cursor-pointer group flex items-start h-full">
                         <input 
                             type="radio" 
                             name={`answer-${q.id}`} 
@@ -193,9 +208,10 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
                             checked={answers[currentQuestionIndex] === idx}
                             onChange={() => handleSingleChoice(idx)}
                         />
-                        <div className="w-full p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all flex items-center group-hover:border-blue-400">
-                            <div className="w-6 h-6 rounded-full border-2 border-gray-300 mr-3 flex-shrink-0 flex items-center justify-center radio-dot transition-all" style={{ '--tw-border-color': themeColor } as React.CSSProperties}></div>
-                            <span className="font-semibold mr-3 text-gray-500 w-4">{String.fromCharCode(65+idx)}.</span>
+                        <div className="w-full p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all flex items-center group-hover:border-blue-400 h-full">
+                            <div className="w-8 h-8 rounded-full border-2 border-gray-300 mr-3 flex-shrink-0 flex items-center justify-center radio-dot transition-all font-bold text-gray-400" style={{ '--tw-border-color': themeColor } as React.CSSProperties}>
+                                {String.fromCharCode(65+idx)}
+                            </div>
                             <span className={`${getFontSizeClass()} text-gray-700`}>{opt}</span>
                         </div>
                     </label>
@@ -204,7 +220,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
           );
       } else if (q.type === 'PG_KOMPLEKS' || q.type === 'CHECKLIST') {
           return (
-            <div className="flex flex-col space-y-3">
+            <div className="grid grid-cols-1 gap-3">
                 <p className="text-sm italic mb-2" style={{ color: themeColor }}>* Pilih jawaban lebih dari satu</p>
                 {q.options?.map((opt, idx) => (
                     <label key={idx} className="cursor-pointer group flex items-start">
@@ -326,7 +342,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       {/* Main Content Split */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 flex flex-col md:flex-row gap-6">
         {/* Left: Question */}
-        <div className="w-full md:w-2/3 bg-white p-4">
+        <div className="w-full md:w-1/2 bg-white p-4">
             {currentQ.imgUrl && (
                  <div className="mb-4 max-w-sm">
                      <img src={currentQ.imgUrl} alt="Soal" className="rounded-lg border" />
@@ -337,11 +353,11 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
             </div>
         </div>
 
-        {/* Vertical Divider */}
+        {/* Vertical Divider (Hidden on mobile) */}
         <div className="hidden md:block w-px bg-gray-200 border-r border-dashed border-gray-300 self-stretch mx-2"></div>
 
         {/* Right: Options / Answers */}
-        <div className="w-full md:w-1/3">
+        <div className="w-full md:w-1/2">
             {renderAnswerInput(currentQ)}
         </div>
       </main>
@@ -366,7 +382,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
                   </button>
               </div>
 
-              {currentQuestionIndex === exam.questions.length - 1 ? (
+              {currentQuestionIndex === activeQuestions.length - 1 ? (
                    <button 
                     onClick={finishExam}
                     className="flex items-center px-4 py-2 text-white rounded font-medium hover:opacity-90 transition"
@@ -376,7 +392,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
                    </button>
               ) : (
                   <button 
-                    onClick={() => setCurrentQuestionIndex(prev => Math.min(exam.questions.length - 1, prev + 1))}
+                    onClick={() => setCurrentQuestionIndex(prev => Math.min(activeQuestions.length - 1, prev + 1))}
                     className="flex items-center px-4 py-2 text-white rounded font-medium hover:opacity-90 transition"
                     style={{ backgroundColor: themeColor }}
                   >

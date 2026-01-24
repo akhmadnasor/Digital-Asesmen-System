@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, AppSettings } from '../types';
 import { db } from '../services/database';
-import { GraduationCap, UserCircle, RefreshCcw, Lock } from 'lucide-react';
+import { UserCircle, RefreshCcw, Lock } from 'lucide-react';
 import { BackgroundShapes } from './BackgroundShapes';
 
 interface StudentFlowProps {
@@ -15,7 +15,7 @@ type Step = 'DASHBOARD' | 'DATA_CONFIRM' | 'TEST_CONFIRM';
 
 export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onLogout, settings }) => {
   const [step, setStep] = useState<Step>('DASHBOARD');
-  const [selectedLevel, setSelectedLevel] = useState<'SD' | 'SMP'>('SD');
+  // Removed level selector state, default to SD
   const [selectedSubject, setSelectedSubject] = useState('');
   const [availableExams, setAvailableExams] = useState<Exam[]>([]);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -29,13 +29,9 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    db.getExams(selectedLevel).then(setAvailableExams);
-  }, [selectedLevel]);
-
-  const handleLevelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedLevel(e.target.value as 'SD' | 'SMP');
-    setSelectedSubject(''); // Reset subject when level changes
-  };
+    // Force level to SD
+    db.getExams('SD').then(setAvailableExams);
+  }, []);
 
   const handleSubjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedSubject(e.target.value);
@@ -90,21 +86,6 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
       background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  // Logo Container Logic
-  const getLogoContainerClasses = () => {
-      switch(settings.logoStyle) {
-          case 'rect_3_4_vert': return 'rounded-xl w-24 h-32';
-          case 'rect_4_3': return 'rounded-xl w-32 h-24';
-          default: return 'rounded-full w-24 h-24';
-      }
-  };
-
-  const getLogoImageClasses = () => {
-    return settings.logoStyle === 'circle'
-      ? 'rounded-full w-full h-full object-cover bg-white'
-      : 'rounded w-full h-full object-contain bg-white';
-  };
-
   // --- VIEW 1: DASHBOARD (Halaman 2) ---
   if (step === 'DASHBOARD') {
     return (
@@ -114,23 +95,24 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
 
         {/* Header/Logo Area */}
         <div className="flex flex-col items-center mb-10 text-white animate-in slide-in-from-top-10 fade-in duration-700 z-10">
-             <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="w-20 h-20 mb-4 drop-shadow-lg" alt="Tut Wuri Handayani" />
+             <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="w-16 h-16 mb-4 drop-shadow-lg" alt="Tut Wuri Handayani" />
              <h1 className="text-3xl font-bold tracking-wide text-center drop-shadow-md">{settings.appName}</h1>
-             <p className="opacity-90 font-light drop-shadow-sm">Digital Assessment System (DAS)</p>
+             <p className="opacity-90 font-light drop-shadow-sm">Digital Assessment System (DAS) - SD</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg text-center animate-in zoom-in-95 duration-500 z-10 relative mt-12">
-             <div className={`flex items-center justify-center mx-auto absolute left-1/2 -translate-x-1/2 -top-12 ring-4 ring-white shadow-md ${getLogoContainerClasses()}`} style={{ backgroundColor: settings.themeColor }}>
-                {settings.schoolLogoUrl ? (
-                    <img src={settings.schoolLogoUrl} className={getLogoImageClasses()} alt="Logo" />
-                ) : (
-                    <GraduationCap className="text-white w-10 h-10" />
-                )}
+             <div className="flex justify-center absolute left-1/2 -translate-x-1/2 -top-16">
+                 {/* Custom Logo for Dashboard Card */}
+                 <img 
+                    src="https://i.imghippo.com/files/xYek7566NhY.png" 
+                    className="w-32 h-auto object-contain animate-float-slow filter drop-shadow-md" 
+                    alt="Logo" 
+                 />
              </div>
              
-             <h2 className="text-2xl font-bold text-gray-800 mb-2 mt-12">Simulasi TKA</h2>
-             <p className="text-gray-500 mb-6 text-sm">Pilih jenjang dan mata pelajaran untuk memulai simulasi</p>
+             <h2 className="text-2xl font-bold text-gray-800 mb-2 mt-12">Ujian TKA SD</h2>
+             <p className="text-gray-500 mb-6 text-sm">Pilih mata pelajaran untuk memulai ujian</p>
 
              {/* User Info "Menu" */}
              <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-6 flex items-center justify-between">
@@ -149,28 +131,14 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
              </div>
 
              <div className="space-y-4 text-left">
-                <div>
+                {/* Fixed Level */}
+                <div className="opacity-75">
                     <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
                          Jenjang Pendidikan:
                     </label>
-                    <select 
-                        className="w-full border border-gray-300 rounded-lg p-3 text-gray-700 focus:ring-2 outline-none transition"
-                        style={{ '--tw-ring-color': settings.themeColor } as React.CSSProperties}
-                        value={selectedLevel}
-                        onChange={handleLevelChange}
-                    >
-                        <option value="SD">SD/MI/Sederajat</option>
-                        <option value="SMP">SMP/MTS/Sederajat</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-                         Jenis Mata Pelajaran:
-                    </label>
-                    <select disabled className="w-full border border-gray-300 rounded-lg p-3 text-gray-500 bg-gray-100 cursor-not-allowed">
-                        <option>Mata Pelajaran Wajib</option>
-                    </select>
+                    <div className="w-full border border-gray-200 rounded-lg p-3 text-gray-700 bg-gray-100 font-bold">
+                        SD/MI/Sederajat
+                    </div>
                 </div>
 
                 <div>
@@ -178,7 +146,7 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                          Mata Pelajaran:
                     </label>
                     <select 
-                        className="w-full border border-gray-300 rounded-lg p-3 text-gray-700 focus:ring-2 outline-none transition"
+                        className="w-full border border-gray-300 rounded-lg p-3 text-gray-700 focus:ring-2 outline-none transition cursor-pointer hover:border-blue-400"
                         style={{ '--tw-ring-color': settings.themeColor } as React.CSSProperties}
                         value={selectedSubject}
                         onChange={handleSubjectChange}
@@ -217,7 +185,7 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                      <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="w-12 h-12 drop-shadow-md" />
                      <div>
                          <h1 className="font-bold text-xl tracking-wide">{settings.appName}</h1>
-                         <p className="text-sm opacity-90">Digital Assessment System (DAS)</p>
+                         <p className="text-sm opacity-90">Digital Assessment System (DAS) - SD</p>
                      </div>
                  </div>
                  <div className="text-right text-xs md:text-sm bg-black/20 px-3 py-1 rounded">
@@ -289,6 +257,14 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                           <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
                               <label className="font-bold text-gray-700">Mata Ujian</label>
                               <div className="md:col-span-2 text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">{selectedExam.title}</div>
+                          </div>
+                          {/* Display Schedule */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
+                              <label className="font-bold text-gray-700">Waktu Pelaksanaan</label>
+                              <div className="md:col-span-2 text-blue-600 font-bold bg-blue-50 p-2 rounded border border-blue-100">
+                                  {new Date(selectedExam.startDate || '').toLocaleString()} <br/>
+                                  <span className="text-xs text-gray-500 font-normal">Durasi: {selectedExam.durationMinutes} Menit</span>
+                              </div>
                           </div>
 
                           <div className="border-t my-2 border-gray-100"></div>

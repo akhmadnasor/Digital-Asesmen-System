@@ -138,6 +138,15 @@ export const db = {
     await supabase.from('exams').update({ token: newToken }).eq('id', examId);
   },
 
+  updateExamSchedule: async (examId: string, token: string, durationMinutes: number, startDate: string, endDate: string): Promise<void> => {
+    await supabase.from('exams').update({ 
+      token: token,
+      duration_minutes: durationMinutes,
+      start_date: startDate,
+      end_date: endDate 
+    }).eq('id', examId);
+  },
+
   createExam: async (exam: Exam): Promise<void> => {
     // 1. Insert Exam
     const examPayload = {
