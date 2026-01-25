@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Exam, AppSettings } from './types';
-import { db } from './services/database';
-import { cacheManager } from './utils/cache'; // Import Cache Manager
+import { db } from './services/database'; // SWITCHED TO REAL DB
+import { cacheManager } from './utils/cache'; 
 import { ExamInterface } from './components/ExamInterface';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
@@ -23,18 +23,22 @@ const App: React.FC = () => {
     themeColor: '#2459a9',
     gradientEndColor: '#60a5fa',
     logoStyle: 'circle',
+    schoolLogoUrl: 'https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm',
     antiCheat: { isActive: true, freezeDurationSeconds: 15, alertText: 'Violation!', enableSound: true }
   });
 
   useEffect(() => {
-    // Jalankan pembersihan cache otomatis saat aplikasi dimuat
     cacheManager.initialize();
     loadSettings();
   }, []);
 
   const loadSettings = async () => {
-    const s = await db.getSettings();
-    setSettings(s);
+    try {
+      const s = await db.getSettings();
+      setSettings(s);
+    } catch (error) {
+      console.error("Failed to load settings", error);
+    }
   };
 
   const refreshSettings = () => {
@@ -45,7 +49,6 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     
-    // Check against DB with password
     const user = await db.login(loginInput, passwordInput);
     
     setLoading(false);
@@ -57,9 +60,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Bersihkan sesi saat logout
     cacheManager.clearSession();
-    
     setCurrentUser(null);
     setActiveExam(null);
     setLoginInput('');
@@ -76,24 +77,25 @@ const App: React.FC = () => {
       handleLogout();
   };
 
-  // Dynamic Background Style for Login
   const loginBgStyle = {
     background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  // --- VIEW: LOGIN (Halaman 1) ---
   if (!currentUser) {
     return (
       <div className="min-h-screen relative font-sans overflow-hidden" style={loginBgStyle}>
         
         <BackgroundShapes />
 
-        {/* Sticky Header */}
         <header className="fixed top-0 w-full z-50 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                     <div className="bg-white p-1 rounded-full shadow">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="h-10 w-10" alt="Logo" />
+                        <img 
+                            src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
+                            className="h-10 w-10" 
+                            alt="Logo Kemdikbud"
+                        />
                     </div>
                     <div>
                         <h1 className="text-xl font-extrabold text-white tracking-wide drop-shadow-sm">{settings.appName}</h1>
@@ -103,16 +105,15 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        {/* Login Form Container */}
         <div className="min-h-screen flex items-center justify-center p-4 pt-20">
             <div className="bg-white/95 backdrop-blur-sm p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md relative z-10 border border-white/50 animate-in zoom-in-95 duration-500">
             
             <div className="flex justify-center mb-6">
-                 {/* Updated Logo: No Frame, Custom URL, Floating Animation */}
                  <img 
-                    src="https://i.imghippo.com/files/xYek7566NhY.png" 
+                    src="https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm" 
                     className="w-40 h-auto object-contain animate-float-slow filter drop-shadow-xl" 
                     alt="Logo Uji TKA Mandiri" 
+                    referrerPolicy="no-referrer"
                  />
             </div>
             
@@ -165,7 +166,6 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Floating Footer */}
         <div className="fixed bottom-6 w-full text-center z-20 pointer-events-none">
             <span className="inline-block bg-white/80 backdrop-blur rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg border border-white/50" style={{ color: settings.themeColor }}>
                Digital Assessment System (DAS) @2026 | akhmadnasor
@@ -176,17 +176,14 @@ const App: React.FC = () => {
     );
   }
 
-  // --- VIEW: SUPER ADMIN ---
   if (currentUser.role === UserRole.SUPER_ADMIN) {
     return <SuperAdminDashboard user={currentUser} onLogout={handleLogout} settings={settings} onSettingsChange={refreshSettings} />;
   }
 
-  // --- VIEW: ADMIN ---
   if (currentUser.role === UserRole.ADMIN) {
     return <AdminDashboard user={currentUser} onLogout={handleLogout} appName={settings.appName} onSettingsChange={refreshSettings} themeColor={settings.themeColor} />;
   }
 
-  // --- VIEW: STUDENT EXAM (Halaman 5) ---
   if (activeExam) {
     return (
       <ExamInterface 
@@ -200,7 +197,6 @@ const App: React.FC = () => {
     );
   }
 
-  // --- VIEW: STUDENT FLOW (Halaman 2, 3, 4) ---
   return (
     <StudentFlow 
         user={currentUser} 
@@ -211,7 +207,6 @@ const App: React.FC = () => {
   );
 };
 
-// Helper Icon for Login Input
 const UserCircleIcon = ({className, size}: {className?: string, size?: number}) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <circle cx="12" cy="12" r="10"></circle>

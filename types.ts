@@ -16,6 +16,7 @@ export interface User {
   gender?: 'Laki-laki' | 'Perempuan';
   birthDate?: string;
   isLocked?: boolean; 
+  password?: string;
 }
 
 export type QuestionType = 'PG' | 'PG_KOMPLEKS' | 'CHECKLIST' | 'URAIAN';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, AppSettings } from '../types';
-import { db } from '../services/database';
+import { db } from '../services/database'; // SWITCHED TO REAL DB
 import { Users, LogOut, Shield, UserPlus, Trash2, Edit, Search, LayoutDashboard, Palette, Save, AlertTriangle, Speaker, Clock, Upload, Image as ImageIcon, Link } from 'lucide-react';
 
 interface Props {

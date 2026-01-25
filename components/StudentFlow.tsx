@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, AppSettings } from '../types';
-import { db } from '../services/database';
-import { UserCircle, RefreshCcw, Lock } from 'lucide-react';
+import { db } from '../services/database'; // SWITCHED TO REAL DB
+import { UserCircle, RefreshCcw, Lock, CheckCircle, Play } from 'lucide-react';
 import { BackgroundShapes } from './BackgroundShapes';
 
 interface StudentFlowProps {
@@ -13,11 +13,50 @@ interface StudentFlowProps {
 
 type Step = 'DASHBOARD' | 'DATA_CONFIRM' | 'TEST_CONFIRM';
 
+// FIXED: Reliable Icon URLs (Flaticon)
+const getSubjectIcon = (subject: string) => {
+    const lower = subject.toLowerCase();
+    
+    // Bahasa Indonesia (Updated to Book Icon as requested)
+    if (lower.includes('indonesia') || lower.includes('bahasa')) 
+        return 'https://cdn-icons-png.flaticon.com/128/3389/3389081.png'; // 3D Book Icon
+
+    // Matematika
+    if (lower.includes('matematika') || lower.includes('math')) 
+        return 'https://cdn-icons-png.flaticon.com/128/3965/3965108.png';
+    
+    // IPA (Remains for fallback, though removed from Mock Data)
+    if (lower.includes('ipa') || lower.includes('alam') || lower.includes('sains')) 
+        return 'https://cdn-icons-png.flaticon.com/128/2082/2082491.png';
+    
+    // IPS
+    if (lower.includes('ips') || lower.includes('sosial')) 
+        return 'https://cdn-icons-png.flaticon.com/128/921/921490.png';
+    
+    // PKN
+    if (lower.includes('pkn') || lower.includes('kewarganegaraan')) 
+        return 'https://cdn-icons-png.flaticon.com/128/9255/9255558.png';
+    
+    // PAI / Agama
+    if (lower.includes('agama') || lower.includes('pai')) 
+        return 'https://cdn-icons-png.flaticon.com/128/3004/3004458.png';
+
+    // PJOK
+    if (lower.includes('pjok') || lower.includes('olahraga')) 
+        return 'https://cdn-icons-png.flaticon.com/128/2544/2544087.png';
+
+    // SBdP / Seni
+    if (lower.includes('seni') || lower.includes('budaya')) 
+        return 'https://cdn-icons-png.flaticon.com/128/1048/1048944.png';
+
+    // Default
+    return 'https://cdn-icons-png.flaticon.com/128/2232/2232688.png';
+};
+
 export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onLogout, settings }) => {
   const [step, setStep] = useState<Step>('DASHBOARD');
-  // Removed level selector state, default to SD
-  const [selectedSubject, setSelectedSubject] = useState('');
   const [availableExams, setAvailableExams] = useState<Exam[]>([]);
+  const [completedExams, setCompletedExams] = useState<string[]>([]);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   
   // Confirmation Form State
@@ -25,30 +64,39 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
   const [inputToken, setInputToken] = useState('');
   const [inputDay, setInputDay] = useState('01');
   const [inputMonth, setInputMonth] = useState('01');
-  const [inputYear, setInputYear] = useState('2010');
+  const [inputYear, setInputYear] = useState('2012');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    // Force level to SD
-    db.getExams('SD').then(setAvailableExams);
-  }, []);
+    loadExamsAndResults();
+  }, [user.id]);
 
-  const handleSubjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedSubject(e.target.value);
+  const loadExamsAndResults = async () => {
+    // 1. Get Exams
+    const exams = await db.getExams('SD');
+    
+    // STRICT FILTER: Ensure only SD subjects and remove SMP if accidentally in DB
+    const cleanExams = exams.filter(e => 
+        (e.educationLevel === 'SD' || e.title.includes('SD')) && 
+        !e.title.toLowerCase().includes('smp')
+    );
+
+    setAvailableExams(cleanExams);
+
+    // 2. Get Results for this user to check what is done
+    const allResults = await db.getAllResults();
+    const myResults = allResults.filter(r => r.studentId === user.id);
+    const finishedExamIds = myResults.map(r => r.examId);
+    setCompletedExams(finishedExamIds);
   };
 
-  const handleStartSimulation = () => {
-    if (!selectedSubject) {
-      alert("Pilih mata pelajaran terlebih dahulu!");
-      return;
-    }
-    const exam = availableExams.find(e => e.subject === selectedSubject);
-    if (!exam) {
-      alert("Ujian tidak ditemukan untuk mata pelajaran ini.");
-      return;
-    }
+  const handleSelectExam = (exam: Exam) => {
+    if (completedExams.includes(exam.id)) return; 
+    
     setSelectedExam(exam);
     setStep('DATA_CONFIRM');
+    // Pre-fill name for convenience
+    setInputName(''); 
   };
 
   const handleRefresh = () => {
@@ -88,86 +136,117 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
 
   // --- VIEW 1: DASHBOARD (Halaman 2) ---
   if (step === 'DASHBOARD') {
+    const sortedExams = availableExams; 
+
     return (
-      <div className="min-h-screen flex flex-col items-center pt-20 px-4 pb-10 overflow-hidden relative" style={themeStyle}>
+      <div className="min-h-screen flex flex-col items-center pt-10 px-4 pb-10 overflow-hidden relative" style={themeStyle}>
         
         <BackgroundShapes />
 
-        {/* Header/Logo Area */}
-        <div className="flex flex-col items-center mb-10 text-white animate-in slide-in-from-top-10 fade-in duration-700 z-10">
-             <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="w-16 h-16 mb-4 drop-shadow-lg" alt="Tut Wuri Handayani" />
-             <h1 className="text-3xl font-bold tracking-wide text-center drop-shadow-md">{settings.appName}</h1>
-             <p className="opacity-90 font-light drop-shadow-sm">Digital Assessment System (DAS) - SD</p>
+        {/* Header/Logo Area - KEMDIKBUD LOGO */}
+        <div className="flex flex-col items-center mb-6 text-white animate-in slide-in-from-top-10 fade-in duration-700 z-10">
+             <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/20 shadow-lg">
+                <img 
+                    src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
+                    className="w-8 h-8 drop-shadow-md" 
+                    alt="Logo Kemdikbud" 
+                />
+                <h1 className="text-lg font-bold tracking-wide drop-shadow-md">{settings.appName}</h1>
+             </div>
+             <p className="opacity-90 font-light drop-shadow-sm mt-2 text-sm">Selamat Datang, <strong>{user.name}</strong>!</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-lg text-center animate-in zoom-in-95 duration-500 z-10 relative mt-12">
-             <div className="flex justify-center absolute left-1/2 -translate-x-1/2 -top-16">
-                 {/* Custom Logo for Dashboard Card */}
-                 <img 
-                    src="https://i.imghippo.com/files/xYek7566NhY.png" 
-                    className="w-32 h-auto object-contain animate-float-slow filter drop-shadow-md" 
-                    alt="Logo" 
-                 />
-             </div>
-             
-             <h2 className="text-2xl font-bold text-gray-800 mb-2 mt-12">Ujian TKA SD</h2>
-             <p className="text-gray-500 mb-6 text-sm">Pilih mata pelajaran untuk memulai ujian</p>
+        {/* Dashboard Grid Container */}
+        <div className="w-full max-w-5xl z-10">
+            
+            {/* User Info Bar */}
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 mb-8 flex flex-col md:flex-row items-center justify-between border border-white/50">
+                 <div className="flex items-center gap-4">
+                     <div className="bg-blue-100 p-2 rounded-full border-2 border-blue-200">
+                         <UserCircle className="text-blue-600" size={32}/>
+                     </div>
+                     <div>
+                         <p className="text-xs text-gray-500 font-bold uppercase">Peserta Ujian</p>
+                         <h2 className="text-lg font-bold text-gray-800">{user.name}</h2>
+                         <p className="text-xs text-gray-500 font-mono">{user.nisn} | Kelas {user.grade || 6}</p>
+                     </div>
+                 </div>
+                 
+                 <div className="mt-4 md:mt-0 flex gap-3">
+                     <div className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold border border-green-200 flex items-center">
+                         <Lock size={14} className="mr-2"/> Akun Aman
+                     </div>
+                     <button onClick={onLogout} className="px-4 py-2 bg-red-50 text-red-700 rounded-lg text-xs font-bold border border-red-200 hover:bg-red-100 transition">
+                         Keluar
+                     </button>
+                 </div>
+            </div>
 
-             {/* User Info "Menu" */}
-             <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="bg-blue-100 p-2 rounded-full">
-                        <UserCircle className="text-blue-600" size={20}/>
+            <div className="text-center mb-6">
+                 <h2 className="text-2xl font-bold text-white drop-shadow-md mb-2">Pilih Mata Pelajaran</h2>
+                 <p className="text-blue-100 text-sm">Silakan pilih ujian yang tersedia di bawah ini untuk mulai mengerjakan.</p>
+            </div>
+
+            {/* 3D CARD GRID */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                {sortedExams.map((exam) => {
+                    const isDone = completedExams.includes(exam.id);
+                    return (
+                        <div 
+                            key={exam.id}
+                            onClick={() => !isDone && handleSelectExam(exam)}
+                            className={`
+                                relative group rounded-3xl p-6 transition-all duration-300 transform flex flex-col items-center justify-between min-h-[280px] overflow-hidden
+                                ${isDone 
+                                    ? 'bg-white/80 border-4 border-green-200 grayscale-[0.3]' 
+                                    : 'bg-white border-b-[10px] border-blue-200 hover:-translate-y-3 hover:shadow-2xl cursor-pointer hover:border-blue-400'
+                                }
+                            `}
+                        >
+                             {/* Floating Icon Container */}
+                             <div className="relative w-full flex justify-center mt-4 mb-6 h-32 items-center">
+                                 {/* Glowing effect behind */}
+                                 <div className="absolute inset-0 bg-blue-400/20 blur-2xl rounded-full scale-50 group-hover:scale-100 transition-transform duration-500"></div>
+                                 
+                                 <img 
+                                    src={getSubjectIcon(exam.subject)} 
+                                    alt={exam.subject}
+                                    className={`w-32 h-32 object-contain filter drop-shadow-xl z-10 transition-transform duration-500 ${!isDone && 'group-hover:scale-110 group-hover:-rotate-3'}`}
+                                 />
+                             </div>
+
+                             <div className="text-center w-full z-10">
+                                 <h3 className="text-xl font-extrabold text-gray-800 mb-1 leading-tight line-clamp-2">{exam.subject}</h3>
+                                 <p className="text-xs text-gray-500 mb-4 font-semibold line-clamp-1">{exam.title}</p>
+                                 
+                                 <div className="flex justify-center gap-2 text-xs font-bold text-gray-500 mb-6 bg-gray-50 p-2 rounded-lg inline-flex">
+                                     <span className="flex items-center"><span className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1"></span>{exam.durationMinutes} Menit</span>
+                                     <span className="flex items-center"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1"></span>{exam.questions.length} Soal</span>
+                                 </div>
+
+                                 {isDone ? (
+                                     <div className="w-full py-3 bg-green-100 text-green-700 rounded-xl font-bold text-sm flex items-center justify-center shadow-inner">
+                                         <CheckCircle size={18} className="mr-2"/> Sudah Dikerjakan
+                                     </div>
+                                 ) : (
+                                     <button className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-blue-300 shadow-lg group-hover:bg-blue-700 transition flex items-center justify-center transform group-hover:scale-105 active:scale-95">
+                                         <Play size={18} className="mr-2 fill-current"/> Kerjakan Sekarang
+                                     </button>
+                                 )}
+                             </div>
+                        </div>
+                    );
+                })}
+
+                {sortedExams.length === 0 && (
+                    <div className="col-span-full bg-white/50 backdrop-blur-sm rounded-xl p-12 text-center text-white border border-white/20 shadow-xl">
+                        <div className="mb-4 text-6xl animate-pulse">📝</div>
+                        <h3 className="text-xl font-bold mb-2">Belum Ada Jadwal Ujian SD</h3>
+                        <p className="opacity-80">Silakan hubungi proktor atau admin sekolah untuk info lebih lanjut.</p>
                     </div>
-                    <div className="text-left">
-                        <p className="text-xs text-gray-500 font-bold uppercase">Peserta</p>
-                        <p className="text-sm font-bold text-gray-800">{user.name}</p>
-                    </div>
-                </div>
-                <div className="bg-green-100 p-2 rounded-full" title="Akun Terkunci & Aman">
-                    <Lock className="text-green-600" size={16}/>
-                </div>
-             </div>
+                )}
+            </div>
 
-             <div className="space-y-4 text-left">
-                {/* Fixed Level */}
-                <div className="opacity-75">
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-                         Jenjang Pendidikan:
-                    </label>
-                    <div className="w-full border border-gray-200 rounded-lg p-3 text-gray-700 bg-gray-100 font-bold">
-                        SD/MI/Sederajat
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-                         Mata Pelajaran:
-                    </label>
-                    <select 
-                        className="w-full border border-gray-300 rounded-lg p-3 text-gray-700 focus:ring-2 outline-none transition cursor-pointer hover:border-blue-400"
-                        style={{ '--tw-ring-color': settings.themeColor } as React.CSSProperties}
-                        value={selectedSubject}
-                        onChange={handleSubjectChange}
-                    >
-                        <option value="">-- Pilih Mata Pelajaran --</option>
-                        {availableExams.map(e => (
-                            <option key={e.id} value={e.subject}>{e.subject}</option>
-                        ))}
-                    </select>
-                </div>
-             </div>
-
-             <button 
-                onClick={handleStartSimulation}
-                className="w-full mt-8 text-white font-bold py-3 rounded-lg shadow-lg transition transform active:scale-95 flex items-center justify-center hover:opacity-90"
-                style={{ backgroundColor: settings.themeColor }}
-             >
-                Mulai Simulasi
-             </button>
-             
-             <button onClick={onLogout} className="mt-4 text-sm text-gray-400 hover:text-red-500 underline">Logout</button>
         </div>
       </div>
     );
@@ -182,7 +261,12 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
             
             <header className="relative z-10 flex justify-between items-center p-6 text-white max-w-7xl mx-auto w-full">
                  <div className="flex items-center gap-4">
-                     <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="w-12 h-12 drop-shadow-md" />
+                     {/* KEMDIKBUD LOGO */}
+                     <img 
+                        src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
+                        className="w-12 h-12 drop-shadow-md" 
+                        alt="Logo Kemdikbud" 
+                     />
                      <div>
                          <h1 className="font-bold text-xl tracking-wide">{settings.appName}</h1>
                          <p className="text-sm opacity-90">Digital Assessment System (DAS) - SD</p>
@@ -213,7 +297,6 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                         </button>
                     </div>
 
-                    {/* User Profile "Menu" */}
                     <div className="bg-white rounded shadow-md p-4 border-l-4 border-gray-300">
                          <div className="flex items-center gap-3">
                             <div className="bg-gray-100 p-2 rounded-full">
@@ -224,11 +307,11 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                                 <p className="text-xs text-gray-500">{user.nisn} <span className="mx-1">•</span> {user.school || 'Sekolah'}</p>
                             </div>
                          </div>
-                         <div className="mt-3 pt-3 border-t flex justify-between items-center text-xs text-gray-500">
-                             <span>Akun Terproteksi</span>
-                             <Lock size={12} />
-                         </div>
                     </div>
+                    
+                    <button onClick={() => setStep('DASHBOARD')} className="w-full py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-50 font-bold text-sm">
+                        Kembali ke Menu
+                    </button>
                  </div>
 
                  {/* Right Panel: Form */}
@@ -246,25 +329,8 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                               <div className="md:col-span-2 text-gray-600 font-bold uppercase bg-gray-50 p-2 rounded border border-gray-100">{user.name}</div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
-                              <label className="font-bold text-gray-700">Jenis Kelamin</label>
-                              <div className="md:col-span-2 text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">{user.gender || '-'}</div>
-                          </div>
-                           {/* School Origin Field */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
-                              <label className="font-bold text-gray-700">Asal Sekolah</label>
-                              <div className="md:col-span-2 text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">{user.school || 'Tidak Diketahui'}</div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
                               <label className="font-bold text-gray-700">Mata Ujian</label>
                               <div className="md:col-span-2 text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">{selectedExam.title}</div>
-                          </div>
-                          {/* Display Schedule */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 md:items-center gap-1">
-                              <label className="font-bold text-gray-700">Waktu Pelaksanaan</label>
-                              <div className="md:col-span-2 text-blue-600 font-bold bg-blue-50 p-2 rounded border border-blue-100">
-                                  {new Date(selectedExam.startDate || '').toLocaleString()} <br/>
-                                  <span className="text-xs text-gray-500 font-normal">Durasi: {selectedExam.durationMinutes} Menit</span>
-                              </div>
                           </div>
 
                           <div className="border-t my-2 border-gray-100"></div>
@@ -363,13 +429,21 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
                            </div>
                        </div>
 
-                       <button 
-                         onClick={handleStartTest}
-                         className="w-full text-white font-bold py-3.5 rounded-full mt-8 shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl"
-                         style={{ backgroundColor: settings.themeColor }}
-                       >
-                           Mulai Mengerjakan
-                       </button>
+                       <div className="flex gap-2 mt-8">
+                           <button 
+                             onClick={() => setStep('DATA_CONFIRM')}
+                             className="flex-1 border border-gray-300 text-gray-600 font-bold py-3.5 rounded-full shadow-sm hover:bg-gray-50"
+                           >
+                               Batal
+                           </button>
+                           <button 
+                             onClick={handleStartTest}
+                             className="flex-1 text-white font-bold py-3.5 rounded-full shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl"
+                             style={{ backgroundColor: settings.themeColor }}
+                           >
+                               Mulai
+                           </button>
+                       </div>
                   </div>
              </div>
         </div>

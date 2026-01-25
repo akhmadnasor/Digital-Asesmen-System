@@ -2,7 +2,8 @@ import { User, UserRole, Exam, ExamResult, AppSettings } from '../types';
 
 // Initial Mock Data
 let MOCK_SETTINGS: AppSettings = {
-  appName: 'CBT MANDIRI BEJI',
+  appName: 'UJI TKA MANDIRI',
+  schoolLogoUrl: 'https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm', // Default Logo (App Logo) for Card Printing
   themeColor: '#2459a9', // Default Pusmendik Blue
   gradientEndColor: '#60a5fa', // Blue-400
   logoStyle: 'circle',
@@ -23,8 +24,8 @@ const SCHOOLS = [
 ];
 
 let MOCK_USERS: User[] = [
-  { id: '1', name: 'Kepala Sekolah', username: 'superadmin', role: UserRole.SUPER_ADMIN, school: 'PUSAT' },
-  { id: '2', name: 'Admin Sekolah', username: 'admin', role: UserRole.ADMIN, school: 'PUSAT' },
+  { id: '1', name: 'Kepala Sekolah', username: 'superadmin', role: UserRole.SUPER_ADMIN, school: 'PUSAT', password: 'admin' },
+  { id: '2', name: 'Admin Sekolah', username: 'admin', role: UserRole.ADMIN, school: 'PUSAT', password: 'admin' },
   // Students from different schools
   { 
     id: '3', 
@@ -36,7 +37,8 @@ let MOCK_USERS: User[] = [
     school: SCHOOLS[0],
     gender: 'Laki-laki',
     birthDate: '2012-05-15',
-    isLocked: false
+    isLocked: false,
+    password: '12345'
   },
   { 
     id: '4', 
@@ -48,7 +50,8 @@ let MOCK_USERS: User[] = [
     school: SCHOOLS[1],
     gender: 'Laki-laki',
     birthDate: '2012-06-20',
-    isLocked: false
+    isLocked: false,
+    password: '12345'
   },
   { 
     id: '5', 
@@ -57,22 +60,11 @@ let MOCK_USERS: User[] = [
     role: UserRole.STUDENT, 
     grade: 6,
     nisn: '1003',
-    school: SCHOOLS[2],
+    school: SCHOOLS[0],
     gender: 'Perempuan',
     birthDate: '2012-01-10',
-    isLocked: false
-  },
-  { 
-    id: '6', 
-    name: 'Rudi Hartono', 
-    username: 'siswa4', 
-    role: UserRole.STUDENT, 
-    grade: 6,
-    nisn: '1004',
-    school: SCHOOLS[3],
-    gender: 'Laki-laki',
-    birthDate: '2012-08-17',
-    isLocked: false
+    isLocked: false,
+    password: '12345'
   },
 ];
 
@@ -81,36 +73,105 @@ const now = new Date();
 const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
 const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
 
+// ONLY SD SUBJECTS - IPA REMOVED
 let MOCK_EXAMS: Exam[] = [
   {
     id: 'ex-sd-mat',
-    title: 'Matematika - SD Sederajat',
+    title: 'Matematika - Ujian Akhir Semester SD',
     subject: 'Matematika',
     educationLevel: 'SD',
-    durationMinutes: 15,
+    durationMinutes: 90,
     isActive: true,
-    token: 'SRSWUA',
+    token: 'MTKSD1',
     startDate: now.toISOString(), // Ongoing
     endDate: tomorrow.toISOString(),
     questions: [
-      { id: 'q1', type: 'PG', text: 'Perhatikan gambar dadu berikut. Jika jumlah titik pada dua sisi berlawanan adalah 7, berapakah titik di sisi bawah?', imgUrl: 'https://cdn-icons-png.flaticon.com/512/565/565654.png', options: ['2', '3', '4', '5'], correctIndex: 3, points: 10 },
-      { id: 'q2', type: 'PG_KOMPLEKS', text: 'Manakah dari berikut ini yang merupakan bilangan prima? (Pilih lebih dari satu)', options: ['2', '4', '9', '11', '15'], correctIndices: [0, 3], points: 10 },
-      { id: 'q3', type: 'CHECKLIST', text: 'Centang benda yang berbentuk kubus.', options: ['Dadu', 'Bola', 'Kotak Kapur', 'Kaleng Susu'], correctIndices: [0, 2], points: 10 },
-      { id: 'q4', type: 'URAIAN', text: 'Jelaskan apa yang dimaksud dengan pecahan senilai!', points: 10 }, 
+      // SOAL PG BIASA (Single Choice)
+      { 
+        id: 'q_mat_1', 
+        type: 'PG', 
+        text: 'Hasil pengerjaan dari 1.500 + 250 : 5 adalah...', 
+        options: ['350', '1.550', '1.750', '8.750'], 
+        correctIndex: 1, // 1.500 + 50 = 1.550
+        points: 10 
+      },
+      { 
+        id: 'q_mat_2', 
+        type: 'PG', 
+        text: 'Sebuah lingkaran memiliki jari-jari 14 cm. Berapakah luas lingkaran tersebut? (π = 22/7)', 
+        options: ['154 cm²', '616 cm²', '1.232 cm²', '2.464 cm²'], 
+        correctIndex: 1, // 22/7 * 14 * 14 = 616
+        points: 10 
+      },
+      // SOAL PG KOMPLEKS (Checklist - Multiple Choice)
+      { 
+        id: 'q_mat_complex_1', 
+        type: 'CHECKLIST', 
+        text: 'Manakah dari bilangan berikut yang merupakan Bilangan Prima? (Pilih dua jawaban)', 
+        options: ['2', '9', '17', '21'], 
+        correctIndices: [0, 2], // 2 dan 17 adalah prima
+        points: 20 
+      },
+      {
+        id: 'q_mat_complex_2',
+        type: 'CHECKLIST', 
+        text: 'Perhatikan ciri-ciri bangun datar berikut. Mana yang benar mengenai Persegi? (Pilih semua yang benar)',
+        options: ['Memiliki 4 sisi sama panjang', 'Memiliki 2 pasang sisi sejajar', 'Memiliki 3 sudut tumpul', 'Tidak memiliki simetri lipat'],
+        correctIndices: [0, 1], // Sisi sama panjang & sejajar
+        points: 20
+      }
     ]
   },
   {
     id: 'ex-sd-ind',
-    title: 'Bahasa Indonesia - SD Sederajat',
+    title: 'Bahasa Indonesia - SD Literasi',
     subject: 'Bahasa Indonesia',
     educationLevel: 'SD',
-    durationMinutes: 60,
-    isActive: false,
-    token: 'INDO01',
-    startDate: yesterday.toISOString(), // Finished
-    endDate: yesterday.toISOString(),
+    durationMinutes: 90,
+    isActive: true,
+    token: 'INDOSD',
+    startDate: now.toISOString(), 
+    endDate: tomorrow.toISOString(),
     questions: [
-      { id: 'q1', type: 'PG', text: 'Sinonim dari kata "Indah" adalah...', options: ['Jelek', 'Buruk', 'Cantik', 'Kotor'], correctIndex: 2, points: 10 },
+      // SOAL PG BIASA
+      { 
+          id: 'q_ind_1', 
+          type: 'PG', 
+          text: 'Bacalah kalimat berikut: "Budi sangat gemar membaca buku di perpustakaan." \nSinonim dari kata "gemar" pada kalimat tersebut adalah...', 
+          options: ['Bosan', 'Suka', 'Malas', 'Takut'], 
+          correctIndex: 1, // Suka
+          points: 10 
+      },
+      { 
+          id: 'q_ind_2', 
+          type: 'PG', 
+          text: 'Ide pokok dalam sebuah paragraf biasanya dapat ditemukan pada...', 
+          options: ['Kalimat utama', 'Kalimat penjelas', 'Judul bacaan', 'Kesimpulan akhir saja'], 
+          correctIndex: 0, // Kalimat utama
+          points: 10 
+      },
+      // SOAL PG KOMPLEKS
+      {
+          id: 'q_ind_complex_1',
+          type: 'CHECKLIST',
+          text: 'Manakah di bawah ini yang termasuk penulisan kata baku yang BENAR? (Pilih dua jawaban)',
+          options: ['Apotek', 'Nasehat', 'Jadwal', 'Antri'],
+          correctIndices: [0, 2], // Apotek (baku), Nasehat (tidak, harus Nasihat), Jadwal (baku), Antri (tidak, harus Antre) -> Jadi 0 dan 2
+          points: 20
+      },
+      {
+          id: 'q_ind_complex_2',
+          type: 'CHECKLIST',
+          text: 'Pilihlah kalimat yang menggunakan huruf kapital dengan benar:',
+          options: [
+              'Ayah pergi ke surabaya.', 
+              'Presiden Jokowi meresmikan jembatan.', 
+              'ibu membeli garam inggris.', // garam inggris bukan nama geografi spesifik
+              'Kita harus menghormati tamu.'
+          ],
+          correctIndices: [1, 3], 
+          points: 20
+      }
     ]
   }
 ];
@@ -128,11 +189,20 @@ export const mockDb = {
     return Promise.resolve();
   },
 
-  login: async (input: string): Promise<User | undefined> => {
+  login: async (input: string, password?: string): Promise<User | undefined> => {
     return new Promise((resolve) => {
       setTimeout(() => {
         const user = MOCK_USERS.find(u => u.username === input || u.nisn === input);
-        resolve(user);
+        if (user) {
+            // Check password if provided and user has one
+            if (password && user.password && user.password !== password) {
+                resolve(undefined);
+                return;
+            }
+            resolve(user);
+        } else {
+            resolve(undefined);
+        }
       }, 500);
     });
   },
@@ -140,11 +210,7 @@ export const mockDb = {
   getExams: async (level?: 'SD'): Promise<Exam[]> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        if (level) {
-          resolve(MOCK_EXAMS.filter(e => e.isActive && e.educationLevel === level));
-        } else {
-          resolve(MOCK_EXAMS);
-        }
+         resolve(MOCK_EXAMS.filter(e => e.educationLevel === 'SD'));
       }, 300);
     });
   },
@@ -155,9 +221,28 @@ export const mockDb = {
     return Promise.resolve();
   },
 
+  updateExamSchedule: async (examId: string, token: string, durationMinutes: number, startDate: string, endDate: string): Promise<void> => {
+    const exam = MOCK_EXAMS.find(e => e.id === examId);
+    if (exam) {
+        exam.token = token;
+        exam.durationMinutes = durationMinutes;
+        exam.startDate = startDate;
+        exam.endDate = endDate;
+    }
+    return Promise.resolve();
+  },
+
   createExam: async (exam: Exam): Promise<void> => {
     MOCK_EXAMS.push(exam);
     return Promise.resolve();
+  },
+
+  addQuestions: async (examId: string, questions: any[]): Promise<void> => {
+      const exam = MOCK_EXAMS.find(e => e.id === examId);
+      if (exam) {
+          exam.questions = [...exam.questions, ...questions];
+      }
+      return Promise.resolve();
   },
 
   submitResult: async (result: ExamResult): Promise<void> => {
@@ -186,6 +271,12 @@ export const mockDb = {
   resetUserStatus: async (userId: string): Promise<void> => {
     const user = MOCK_USERS.find(u => u.id === userId);
     if (user) user.isLocked = false;
+    return Promise.resolve();
+  },
+
+  resetUserPassword: async (userId: string): Promise<void> => {
+    const user = MOCK_USERS.find(u => u.id === userId);
+    if (user) user.password = '12345';
     return Promise.resolve();
   }
 };

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
 import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle } from 'lucide-react';
-import { db } from '../services/database';
+import { db } from '../services/database'; // SWITCHED TO REAL DB
+import { Confetti } from './Confetti';
 
 interface ExamInterfaceProps {
   user: User;
@@ -23,6 +24,15 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+// Motivations based on score percentage
+const getMotivation = (score: number, maxScore: number, studentName: string) => {
+    const percentage = (score / maxScore) * 100;
+    if (percentage === 100) return `Luar biasa, ${studentName}! Nilai Sempurna! Pertahankan prestasimu!`;
+    if (percentage >= 80) return `Hebat, ${studentName}! Hasil yang sangat memuaskan.`;
+    if (percentage >= 60) return `Bagus, ${studentName}! Teruslah belajar untuk hasil yang lebih baik lagi.`;
+    return `Jangan menyerah, ${studentName}! Kegagalan adalah awal dari kesuksesan. Ayo belajar lebih giat!`;
+};
+
 export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComplete, appName, themeColor, settings }) => {
   // Initialize Randomized Questions ONLY ONCE on mount
   const [activeQuestions] = useState<Question[]>(() => shuffleArray(exam.questions));
@@ -38,9 +48,14 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   const [cheatingAttempts, setCheatingAttempts] = useState(0);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
+  const [maxPossibleScore, setMaxPossibleScore] = useState(0);
   const [isFrozen, setIsFrozen] = useState(false);
 
   useEffect(() => {
+    // Calculate max possible score once
+    const max = activeQuestions.reduce((acc, q) => acc + q.points, 0);
+    setMaxPossibleScore(max);
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -231,7 +246,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
                             onChange={() => handleMultiChoice(idx)}
                         />
                         <div className="w-full p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all flex items-center group-hover:border-blue-400 peer-checked:bg-blue-50 peer-checked:border-blue-500">
-                            <div className="w-6 h-6 rounded border-2 border-gray-300 mr-3 flex-shrink-0 flex items-center justify-center peer-checked:bg-blue-500 peer-checked:border-blue-500">
+                            <div className="w-6 h-6 rounded border-2 border-gray-300 mr-3 flex-shrink-0 flex items-center justify-center peer-checked:bg-blue-50 peer-checked:border-blue-500">
                                 <CheckCircle size={14} className="text-white opacity-0 peer-checked:opacity-100" />
                             </div>
                             <span className={`${getFontSizeClass()} text-gray-700`}>{opt}</span>
@@ -273,36 +288,48 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
 
       {/* Score Popup Modal */}
       {showScoreModal && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center animate-in zoom-in-95 duration-300 border-4 border-white ring-4 ring-blue-500/30">
-                  <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-500">
+              
+              {/* Confetti Effect */}
+              <Confetti />
+
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center animate-in zoom-in-95 duration-300 border-4 border-white ring-8 ring-blue-500/20 relative z-50">
+                  <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner animate-bounce">
                       <Trophy className="w-12 h-12 text-yellow-600" />
                   </div>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2">Selamat!</h2>
-                  <p className="text-gray-500 mb-6">Kamu telah menyelesaikan ujian.</p>
+                  <h2 className="text-3xl font-extrabold text-gray-800 mb-2">Ujian Selesai!</h2>
                   
-                  <div className="bg-blue-50 rounded-xl p-4 mb-8">
-                      <p className="text-sm font-bold uppercase tracking-wider" style={{ color: themeColor }}>Nilai Kamu</p>
-                      <p className="text-5xl font-extrabold mt-2" style={{ color: themeColor }}>{finalScore}</p>
+                  {/* Motivational Quote */}
+                  <p className="text-gray-600 mb-6 italic text-sm">
+                      "{getMotivation(finalScore, maxPossibleScore, user.name)}"
+                  </p>
+                  
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 mb-8 border border-blue-200 shadow-inner">
+                      <p className="text-xs font-bold uppercase tracking-wider text-blue-500">Nilai Perolehan</p>
+                      <p className="text-6xl font-extrabold mt-2 text-blue-700">{finalScore}</p>
                   </div>
 
                   <button 
                     onClick={onComplete}
-                    className="w-full text-white font-bold py-3 rounded-xl shadow-lg transition transform hover:-translate-y-1"
+                    className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition transform hover:-translate-y-1 hover:shadow-xl active:scale-95"
                     style={{ backgroundColor: themeColor }}
                   >
-                      Kembali ke Halaman Utama
+                      Lanjut ke Mata Pelajaran Lain
                   </button>
               </div>
           </div>
       )}
 
-      {/* Header PUSMENDIK Style */}
+      {/* Header PUSMENDIK Style - KEMDIKBUD LOGO */}
       <header className="text-white shadow-md z-10 sticky top-0" style={{ backgroundColor: themeColor }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-4">
             <div className="bg-white p-1 rounded-full">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" className="h-8 w-8" alt="Logo" />
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
+                className="h-8 w-8" 
+                alt="Logo Kemdikbud"
+              />
             </div>
             <div>
               <h1 className="font-bold text-lg leading-tight">{appName}</h1>
