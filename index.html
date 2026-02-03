@@ -76,35 +76,56 @@
         border-bottom: 35px solid rgba(255, 255, 255, 0.2);
       }
 
-      /* Print Specific Styles for PDF Generation */
+      /* STRICT PRINT STYLES FOR CARD GENERATION */
       @media print {
         @page {
           size: A4;
-          margin: 1cm;
+          margin: 10mm; /* Standard margin for A4 */
         }
+        
+        /* Hide EVERYTHING by default */
+        body * {
+          visibility: hidden;
+        }
+
+        /* Only show the wrapper and its children */
+        #printable-area, #printable-area * {
+          visibility: visible;
+        }
+
+        /* Position the wrapper at the very top-left */
+        #printable-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          background-color: white !important;
+        }
+
+        /* Force background colors/images to print */
         body {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
-          background-color: white !important;
         }
-        .no-print {
-          display: none !important;
-        }
-        .print-only {
-          display: block !important;
-        }
-        .print-grid {
-          display: grid !important;
-          grid-template-columns: repeat(2, 1fr) !important;
-          gap: 1.5rem !important;
-        }
-        .break-inside-avoid {
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-        /* Hide scrollbars during print */
+
+        /* Remove browser scrollbars */
         ::-webkit-scrollbar {
           display: none;
+        }
+        
+        /* Ensure Grid works in print */
+        .print-grid {
+          display: grid !important;
+          grid-template-columns: repeat(2, 1fr) !important; /* 2 Cards per row */
+          gap: 1.5cm !important; /* Gap between cards */
+        }
+
+        .card-container {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          border: 1px dashed #ccc; /* Cutting line */
         }
       }
     </style>

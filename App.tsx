@@ -181,7 +181,16 @@ const App: React.FC = () => {
   }
 
   if (currentUser.role === UserRole.ADMIN) {
-    return <AdminDashboard user={currentUser} onLogout={handleLogout} appName={settings.appName} onSettingsChange={refreshSettings} themeColor={settings.themeColor} />;
+    return (
+      <AdminDashboard 
+        user={currentUser} 
+        onLogout={handleLogout} 
+        appName={settings.appName} 
+        onSettingsChange={refreshSettings} 
+        themeColor={settings.themeColor} 
+        settings={settings} // Added Prop
+      />
+    );
   }
 
   if (activeExam) {

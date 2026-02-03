@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Exam, UserRole, Question, QuestionType, ExamResult, AppSettings } from '../types';
 import { db } from '../services/database'; 
-import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame } from 'lucide-react';
+import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -10,6 +10,7 @@ interface AdminDashboardProps {
   appName: string;
   onSettingsChange: () => void;
   themeColor: string;
+  settings: AppSettings; // Added settings to props
 }
 
 // Fixed Logo for Card Printing
@@ -67,7 +68,7 @@ const escapeCSV = (field: any): string => {
     return stringField;
 };
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, appName, onSettingsChange, themeColor }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, appName, onSettingsChange, themeColor, settings }) => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [results, setResults] = useState<ExamResult[]>([]);
@@ -75,8 +76,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [isProcessingImport, setIsProcessingImport] = useState(false);
   
   // TABS
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU' | 'ANTI_CHEAT'>('DASHBOARD');
   
+  // ANTI CHEAT STATE
+  const [acActive, setAcActive] = useState(settings.antiCheat.isActive);
+  const [acFreeze, setAcFreeze] = useState(settings.antiCheat.freezeDurationSeconds);
+  const [acText, setAcText] = useState(settings.antiCheat.alertText);
+  const [acSound, setAcSound] = useState(settings.antiCheat.enableSound);
+
   // MAPPING / SCHEDULE STATE
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -124,6 +131,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
     setUsers(u); // All users are students in new schema
     setResults(r);
     setIsLoadingData(false);
+  };
+
+  const handleSaveAntiCheat = async () => {
+      await db.updateSettings({
+          antiCheat: {
+              isActive: acActive,
+              freezeDurationSeconds: acFreeze,
+              alertText: acText,
+              enableSound: acSound
+          }
+      });
+      onSettingsChange();
+      alert("Pengaturan Sistem Anti-Curang berhasil diperbarui!");
   };
 
   const handleCreateExam = async () => {
@@ -421,6 +441,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
               <NavItem id="MAPPING" label="Mapping Sekolah" icon={Map} />
               <NavItem id="PESERTA" label="Data Peserta" icon={RotateCcw} />
               <NavItem id="CETAK_KARTU" label="Cetak Kartu" icon={Printer} />
+              <div className="my-2 border-t border-white/10"></div>
+              <NavItem id="ANTI_CHEAT" label="Sistem Anti-Curang" icon={ShieldAlert} />
           </nav>
           <div className="p-4 border-t border-white/10 bg-black/10">
                <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 bg-red-500/20 hover:bg-red-500/40 text-red-100 py-2 rounded text-xs font-bold transition border border-red-500/30">
@@ -676,9 +698,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
               </div>
           )}
 
-          {/* CETAK KARTU */}
+          {/* CETAK KARTU - "JOS JIS" MODE */}
           {activeTab === 'CETAK_KARTU' && (
               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:shadow-none print:border-none print:p-0">
+                  {/* Toolbar - Hidden when Printing */}
                   <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4 print:hidden">
                       <h3 className="font-bold text-lg">Cetak Kartu Peserta</h3>
                       <div className="flex flex-wrap gap-4 items-center bg-gray-50 p-3 rounded-lg border">
@@ -693,35 +716,193 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                               <label className="block text-xs font-bold text-gray-500 mb-1">Tanggal Cetak</label>
                               <input type="date" className="border rounded p-1.5 text-sm" value={printDate} onChange={e => setPrintDate(e.target.value)}/>
                           </div>
-                          <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-blue-700 h-full mt-4 md:mt-0"><Printer size={16} className="mr-2"/> Print</button>
+                          <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-blue-700 h-full mt-4 md:mt-0 shadow-lg transform active:scale-95 transition-all">
+                              <Download size={16} className="mr-2"/> Download PDF / Cetak
+                          </button>
                       </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4 print:w-full">
-                      {getMonitoringUsers(cardSchoolFilter).map(u => (
-                          <div key={u.id} className="border-2 border-gray-800 rounded-lg p-4 flex gap-4 break-inside-avoid relative bg-white">
-                              <div className="w-24 flex flex-col items-center justify-center border-r-2 border-dashed border-gray-300 pr-4">
-                                  <img src={FIXED_LOGO_URL} className="w-16 h-16 object-contain mb-2" alt="Logo"/>
-                                  <div className="w-20 h-24 bg-gray-100 border border-gray-300 flex items-center justify-center text-[10px] text-center text-gray-400 font-bold rounded">FOTO 3x4</div>
+
+                  {/* Printable Area - ID used in CSS to show ONLY this */}
+                  <div id="printable-area">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 print-grid">
+                        {getMonitoringUsers(cardSchoolFilter).map(u => (
+                            <div key={u.id} className="card-container bg-white border-2 border-gray-800 p-0 relative break-inside-avoid flex overflow-hidden h-[9cm] w-full" style={{ borderRadius: '4px' }}>
+                                {/* Decorative "Watermark" Background */}
+                                <div className="absolute inset-0 opacity-5 flex items-center justify-center pointer-events-none z-0">
+                                     <img src={FIXED_LOGO_URL} className="w-48 h-48 object-contain grayscale" />
+                                </div>
+                                
+                                <div className="z-10 flex w-full h-full relative">
+                                    {/* Left Column: Photo & Logo */}
+                                    <div className="w-32 bg-gray-50 border-r-2 border-gray-800 flex flex-col items-center p-3 text-center">
+                                        <img src={FIXED_LOGO_URL} className="w-16 h-16 object-contain mb-4 mix-blend-multiply" alt="Logo"/>
+                                        <div className="w-24 h-32 border-2 border-dashed border-gray-400 bg-white flex items-center justify-center mb-2">
+                                            <span className="text-[10px] text-gray-400 font-bold">FOTO 3x4</span>
+                                        </div>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase">Tanda Tangan</p>
+                                    </div>
+
+                                    {/* Right Column: Details */}
+                                    <div className="flex-1 p-3 flex flex-col justify-between">
+                                        {/* Header */}
+                                        <div className="border-b-2 border-gray-800 pb-2 mb-2">
+                                            <h2 className="font-black text-lg text-gray-900 leading-none">KARTU PESERTA</h2>
+                                            <p className="text-xs font-bold text-gray-600 tracking-widest uppercase">UJI TKA MANDIRI</p>
+                                        </div>
+
+                                        {/* Info Table */}
+                                        <div className="flex-1 space-y-1.5 text-xs text-gray-800 font-medium">
+                                            <div className="flex">
+                                                <span className="w-20 font-bold text-gray-500">NAMA</span>
+                                                <span className="font-bold uppercase truncate">: {u.name}</span>
+                                            </div>
+                                            <div className="flex">
+                                                <span className="w-20 font-bold text-gray-500">NISN</span>
+                                                <span className="font-mono font-bold">: {u.nisn || u.username}</span>
+                                            </div>
+                                            <div className="flex">
+                                                <span className="w-20 font-bold text-gray-500">PASSWORD</span>
+                                                <span className="font-mono font-bold bg-gray-100 px-1">: {u.password}</span>
+                                            </div>
+                                            <div className="flex">
+                                                <span className="w-20 font-bold text-gray-500">SEKOLAH</span>
+                                                <span className="truncate">: {u.school || '-'}</span>
+                                            </div>
+                                            <div className="flex">
+                                                <span className="w-20 font-bold text-gray-500">SESI</span>
+                                                <span>: 1 (07.30 - 09.30)</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="mt-2 pt-2 border-t border-gray-300 flex justify-between items-end">
+                                            <div className="text-[9px] text-gray-400 italic">
+                                                *Bawa kartu ini saat ujian berlangsung.
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[9px] text-gray-500 mb-4">Jakarta, {new Date(printDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', day: 'numeric' })}</p>
+                                                <p className="text-[10px] font-bold underline">Panitia Pelaksana</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                  </div>
+              </div>
+          )}
+
+          {/* SYSTEM ANTI CHEAT PANEL */}
+          {activeTab === 'ANTI_CHEAT' && (
+              <div className="space-y-6 animate-in fade-in print:hidden">
+                  <div className="flex justify-between items-center">
+                      <h3 className="font-bold text-lg flex items-center"><ShieldAlert size={24} className="mr-2 text-red-600"/> Konfigurasi Sistem Anti-Curang</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Configuration Card */}
+                      <div className="bg-white rounded-xl shadow-sm border p-6">
+                          <h4 className="font-bold text-gray-800 mb-4 border-b pb-2">Pengaturan Deteksi & Alert</h4>
+                          <div className="space-y-4">
+                              <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border">
+                                  <div>
+                                      <p className="font-bold text-sm text-gray-700">Status Sistem</p>
+                                      <p className="text-xs text-gray-500">Aktifkan deteksi pindah tab/window.</p>
+                                  </div>
+                                  <button 
+                                      onClick={() => setAcActive(!acActive)}
+                                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${acActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                                  >
+                                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${acActive ? 'translate-x-6' : 'translate-x-1'}`} />
+                                  </button>
                               </div>
-                              <div className="flex-1 flex flex-col justify-between">
-                                  <div className="border-b-2 border-gray-800 mb-2 pb-1 text-center">
-                                      <h4 className="font-bold text-sm uppercase tracking-wider bg-blue-50 text-blue-900 rounded py-1 mb-1">UJI TKA MANDIRI</h4>
-                                      <p className="text-[10px] text-gray-600 font-bold tracking-widest">KARTU PESERTA UJIAN</p>
-                                  </div>
-                                  <div className="text-xs space-y-1.5 flex-1 mt-2">
-                                      <div className="grid grid-cols-3"><span className="font-bold text-gray-600">NAMA</span><span className="col-span-2 uppercase font-bold">: {u.name}</span></div>
-                                      <div className="grid grid-cols-3"><span className="font-bold text-gray-600">NISN/USER</span><span className="col-span-2 font-mono font-bold">: {u.nisn || u.username}</span></div>
-                                      <div className="grid grid-cols-3"><span className="font-bold text-gray-600">PASSWORD</span><span className="col-span-2 font-mono font-bold">: {u.password}</span></div>
-                                      <div className="grid grid-cols-3"><span className="font-bold text-gray-600">SEKOLAH</span><span className="col-span-2">: {u.school || '-'}</span></div>
-                                      <div className="grid grid-cols-3"><span className="font-bold text-gray-600">RUANG</span><span className="col-span-2">: 01</span></div>
-                                  </div>
-                                  <div className="mt-2 text-[10px] text-right text-gray-500 pt-2 border-t border-dotted border-gray-400">
-                                      <p>Dicetak: {new Date(printDate).toLocaleDateString('id-ID', { dateStyle: 'long' })}</p>
-                                      <p className="mt-4 font-bold underline">Panitia Ujian</p>
-                                  </div>
+
+                              <div>
+                                  <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center"><Clock size={14} className="mr-2"/> Durasi Freeze (Detik)</label>
+                                  <input 
+                                      type="number" 
+                                      min="0"
+                                      value={acFreeze}
+                                      onChange={(e) => setAcFreeze(parseInt(e.target.value))}
+                                      className="w-full border rounded-lg p-2 text-sm"
+                                  />
                               </div>
+
+                              <div>
+                                  <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center"><AlertTriangle size={14} className="mr-2"/> Pesan Peringatan</label>
+                                  <textarea 
+                                      value={acText}
+                                      onChange={(e) => setAcText(e.target.value)}
+                                      className="w-full border rounded-lg p-2 text-sm h-20"
+                                      placeholder="Pesan yang muncul saat layar dikunci..."
+                                  />
+                              </div>
+
+                              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border">
+                                  <Volume2 size={18} className="text-gray-600"/>
+                                  <label className="flex-1 text-sm font-bold text-gray-700 cursor-pointer select-none" htmlFor="acSound">
+                                      Bunyi Alert (Beep)
+                                  </label>
+                                  <input 
+                                      type="checkbox" 
+                                      id="acSound"
+                                      checked={acSound}
+                                      onChange={(e) => setAcSound(e.target.checked)}
+                                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                              </div>
+                              
+                              <button onClick={handleSaveAntiCheat} className="w-full bg-slate-800 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-slate-900 transition flex items-center justify-center">
+                                  <Save size={16} className="mr-2"/> Simpan Konfigurasi
+                              </button>
                           </div>
-                      ))}
+                      </div>
+
+                      {/* Cheating Recap Card */}
+                      <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col h-full">
+                          <h4 className="font-bold text-gray-800 mb-4 border-b pb-2 flex items-center text-red-600"><UserX size={18} className="mr-2"/> Riwayat Pelanggaran Siswa</h4>
+                          <div className="flex-1 overflow-y-auto">
+                               {results.filter(r => r.cheatingAttempts > 0).length === 0 ? (
+                                   <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                                       <ShieldAlert size={48} className="mb-2 opacity-50"/>
+                                       <p className="text-sm">Belum ada data pelanggaran.</p>
+                                   </div>
+                               ) : (
+                                   <table className="w-full text-sm text-left">
+                                       <thead className="bg-red-50 text-red-800 font-bold">
+                                           <tr>
+                                               <th className="p-2 rounded-tl-lg">Nama Siswa</th>
+                                               <th className="p-2">Mapel</th>
+                                               <th className="p-2 text-center">Pelanggaran</th>
+                                               <th className="p-2 rounded-tr-lg text-right">Nilai</th>
+                                           </tr>
+                                       </thead>
+                                       <tbody className="divide-y">
+                                           {results
+                                              .filter(r => r.cheatingAttempts > 0)
+                                              .sort((a, b) => b.cheatingAttempts - a.cheatingAttempts)
+                                              .map(r => (
+                                                  <tr key={r.id} className="hover:bg-red-50/50">
+                                                      <td className="p-2">
+                                                          <div className="font-bold text-gray-800">{r.studentName}</div>
+                                                          <div className="text-xs text-gray-500">{users.find(u => u.id === r.studentId)?.school || '-'}</div>
+                                                      </td>
+                                                      <td className="p-2 text-xs text-gray-600">{r.examTitle}</td>
+                                                      <td className="p-2 text-center">
+                                                          <span className="inline-flex items-center justify-center px-2 py-1 bg-red-100 text-red-700 rounded-full font-bold text-xs">
+                                                              {r.cheatingAttempts}x
+                                                          </span>
+                                                      </td>
+                                                      <td className="p-2 text-right font-bold text-gray-700">{r.score}</td>
+                                                  </tr>
+                                              ))
+                                           }
+                                       </tbody>
+                                   </table>
+                               )}
+                          </div>
+                      </div>
                   </div>
               </div>
           )}
