@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
-import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle, ShieldAlert, ZoomIn, X, Maximize2 } from 'lucide-react';
 import { db } from '../services/database'; // SWITCHED TO REAL DB
 import { Confetti } from './Confetti';
 
@@ -97,6 +97,9 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   // Anti Cheat States
   const [isFrozen, setIsFrozen] = useState(false);
   const [freezeTimeLeft, setFreezeTimeLeft] = useState(0);
+
+  // Lightbox State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     // Calculate max possible score once
@@ -333,9 +336,45 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       return null;
   };
 
+  // Magnifier Mouse Handler
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+    
+    // Set Custom Properties for transform-origin
+    e.currentTarget.style.setProperty('--zoom-x', `${x}%`);
+    e.currentTarget.style.setProperty('--zoom-y', `${y}%`);
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans relative select-none">
       
+      {/* Lightbox / Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
+          onClick={() => setPreviewImage(null)}
+        >
+           <button 
+             className="absolute top-6 right-6 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-all z-50"
+             onClick={() => setPreviewImage(null)}
+           >
+              <X size={32} />
+           </button>
+           
+           <img 
+              src={previewImage} 
+              alt="Preview" 
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-300"
+              onClick={(e) => e.stopPropagation()} // Optional: keep modal open if clicking image itself, but user said "click image to zoom out", usually implies clicking away or toggle. I'll let click close it for simplicity or add specific logic.
+           />
+           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-4 py-2 rounded-full pointer-events-none">
+              Klik dimana saja untuk menutup
+           </div>
+        </div>
+      )}
+
       {/* Frozen Overlay (JOS JIS SYSTEM) */}
       {isFrozen && (
           <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-center p-8 backdrop-blur-xl">
@@ -437,16 +476,27 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
         {/* Left: Question */}
         <div className="w-full md:w-1/2 bg-white p-4">
             {currentQ.imgUrl && currentQ.imgUrl.trim() !== '' && (
-                 <div className="mb-4 max-w-sm">
+                 <div 
+                    className="mb-4 max-w-sm relative group overflow-hidden rounded-lg border shadow-sm cursor-zoom-in"
+                    onMouseMove={handleImageMouseMove}
+                    onClick={() => setPreviewImage(currentQ.imgUrl || null)}
+                    style={{ '--zoom-x': '50%', '--zoom-y': '50%' } as React.CSSProperties}
+                 >
                      <img 
                         src={currentQ.imgUrl} 
                         alt="Soal" 
-                        className="rounded-lg border"
-                        onError={(e) => e.currentTarget.style.display = 'none'} 
+                        className="w-full h-auto object-contain transition-transform duration-200 ease-out group-hover:scale-[2.5]"
+                        style={{ transformOrigin: 'var(--zoom-x) var(--zoom-y)' }}
+                        onError={(e) => e.currentTarget.parentElement!.style.display = 'none'} 
                      />
+                     
+                     {/* Magnifier Hint Overlay */}
+                     <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full opacity-80 transition-opacity pointer-events-none flex items-center group-hover:opacity-0">
+                        <Maximize2 size={12} className="mr-1"/> Klik untuk Memperbesar
+                     </div>
                  </div>
             )}
-            <div className={`${getFontSizeClass()} text-gray-800 leading-relaxed`}>
+            <div className={`${getFontSizeClass()} text-gray-800 leading-relaxed whitespace-pre-wrap`}>
                 {currentQ.text}
             </div>
         </div>
