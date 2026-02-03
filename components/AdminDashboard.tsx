@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Exam, UserRole, Question, QuestionType, ExamResult, AppSettings } from '../types';
 import { db } from '../services/database'; 
-import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays } from 'lucide-react';
+import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
   user: User;
@@ -241,39 +242,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const onQuestionFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files?.[0] || !importTargetExamId) return;
       const file = e.target.files[0];
-      try {
-          const text = await file.text();
-          const targetExam = exams.find(ex => ex.id === importTargetExamId);
-          if (!targetExam) return;
-          const rows = parseCSV(text).slice(1);
-          
+      const targetExam = exams.find(ex => ex.id === importTargetExamId);
+      if (!targetExam) return;
+
+      const processRows = (rows: any[]) => {
           const newQuestions: Question[] = rows.map((row, idx) => {
-             if (row.length < 4) return null;
-             // Columns: No, Tipe, Jenis, Soal, Url, A, B, C, D, Kunci, Bobot
-             // Idx:     0   1     2      3     4    5  6  7  8  9      10
+             // Handle both CSV array row and Excel object row (if using headers)
+             // Assumption: Standard Template format
+             // CSV Parser returns array of strings. Excel Parser (sheet_to_json) returns object or array of array.
+             // Let's normalize. If it's Excel json, map keys to indices.
              
-             // Column 9: Key (Kunci Jawaban)
-             const rawKey = row[9] ? row[9].toUpperCase() : 'A';
+             let text, img, oa, ob, oc, od, key, points;
+             
+             if (Array.isArray(row)) {
+                 if (row.length < 4) return null;
+                 text = row[3]; img = row[4]; oa = row[5]; ob = row[6]; oc = row[7]; od = row[8]; key = row[9]; points = row[10];
+             } else {
+                 // Try to match Keys from Template
+                 text = row['Soal'] || row['soal'];
+                 img = row['Url Gambar'] || row['url_gambar'];
+                 oa = row['Opsi A'] || row['opsi_a'];
+                 ob = row['Opsi B'] || row['opsi_b'];
+                 oc = row['Opsi C'] || row['opsi_c'];
+                 od = row['Opsi D'] || row['opsi_d'];
+                 key = row['Kunci'] || row['kunci'];
+                 points = row['Bobot'] || row['bobot'];
+             }
+
+             if (!text) return null;
+
+             const rawKey = key ? String(key).toUpperCase().trim() : 'A';
              let cIndex = rawKey.charCodeAt(0) - 65;
              if (cIndex < 0 || cIndex > 3) cIndex = 0; 
 
              return {
-                  id: `imp-${idx}`,
+                  id: `imp-${idx}-${Date.now()}`,
                   type: 'PG',
-                  text: row[3] || 'Soal',
-                  imgUrl: row[4]?.startsWith('http') ? row[4] : undefined,
-                  options: [row[5] || '', row[6] || '', row[7] || '', row[8] || ''],
+                  text: text || 'Soal',
+                  imgUrl: img && String(img).startsWith('http') ? img : undefined,
+                  options: [oa || '', ob || '', oc || '', od || ''],
                   correctIndex: cIndex,
-                  points: parseInt(row[10] || '10')
+                  points: parseInt(points || '10')
              };
           }).filter(Boolean) as Question[];
 
           if (newQuestions.length) { 
-              await db.addQuestions(targetExam.id, newQuestions); 
-              await loadData(); 
-              alert(`Berhasil import ${newQuestions.length} soal!`); 
+              db.addQuestions(targetExam.id, newQuestions).then(() => {
+                  loadData();
+                  alert(`Berhasil import ${newQuestions.length} soal!`);
+              }); 
           }
-      } catch (e: any) { console.error(e); alert("Format CSV Salah atau file corrupt."); }
+      };
+
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              const bstr = evt.target?.result;
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const wsname = wb.SheetNames[0];
+              const ws = wb.Sheets[wsname];
+              const data = XLSX.utils.sheet_to_json(ws);
+              processRows(data);
+          };
+          reader.readAsBinaryString(file);
+      } else {
+          try {
+              const text = await file.text();
+              const rows = parseCSV(text).slice(1);
+              processRows(rows);
+          } catch (e: any) { console.error(e); alert("Format Salah atau file corrupt."); }
+      }
       e.target.value = '';
   };
 
@@ -365,11 +403,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   );
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
+    <div className="flex h-screen bg-gray-100 font-sans overflow-hidden print:h-auto print:overflow-visible">
       <input type="file" ref={studentFileRef} className="hidden" accept=".csv" onChange={onStudentFileChange} />
-      <input type="file" ref={questionFileRef} className="hidden" accept=".csv" onChange={onQuestionFileChange} />
+      <input type="file" ref={questionFileRef} className="hidden" accept=".csv,.xlsx,.xls" onChange={onQuestionFileChange} />
 
-      <aside className="w-64 flex-shrink-0 text-white flex flex-col shadow-xl z-20 transition-all duration-300" style={{ backgroundColor: themeColor }}>
+      <aside className="w-64 flex-shrink-0 text-white flex flex-col shadow-xl z-20 transition-all duration-300 print:hidden" style={{ backgroundColor: themeColor }}>
           <div className="p-6 border-b border-white/10 flex items-center space-x-3">
               <BookOpen size={28} className="text-white drop-shadow-md" />
               <div><h1 className="font-bold text-lg tracking-wide">ADMIN SD</h1><p className="text-xs text-blue-100 opacity-80">Panel Sekolah Dasar</p></div>
@@ -391,16 +429,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
+      <main className="flex-1 overflow-y-auto p-8 bg-gray-50/50 print:overflow-visible print:h-auto print:absolute print:top-0 print:left-0 print:w-full print:m-0 print:p-0 print:bg-white">
           {/* HEADER */}
-          <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-100 print:hidden">
                <h2 className="text-2xl font-bold text-gray-800 flex items-center">{activeTab.replace('_', ' ')}</h2>
                {isLoadingData && <span className="text-xs text-blue-500 animate-pulse flex items-center"><Loader2 size={12} className="animate-spin mr-1"/> Memuat Data...</span>}
           </header>
 
           {/* DASHBOARD */}
           {activeTab === 'DASHBOARD' && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in print:hidden">
                   <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-blue-500"><p className="text-gray-500 text-xs font-bold uppercase">Total Mapel</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{exams.length}</h3></div>
                   <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-green-500"><p className="text-gray-500 text-xs font-bold uppercase">Siswa Terdaftar</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{users.length}</h3></div>
                   <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-purple-500"><p className="text-gray-500 text-xs font-bold uppercase">Jumlah Sekolah</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{totalSchools}</h3></div>
@@ -410,11 +448,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* MONITORING */}
           {activeTab === 'MONITORING' && (
-               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in">
+               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
                    <h3 className="font-bold text-lg mb-4 flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
                    <div className="overflow-x-auto border rounded bg-white">
                        <table className="w-full text-sm text-left">
-                           <thead className="bg-gray-50 font-bold border-b"><tr><th className="p-3">Nama</th><th className="p-3">NISN</th><th className="p-3">Sekolah</th><th className="p-3">Status</th></tr></thead>
+                           <thead className="bg-gray-50 font-bold border-b">
+                                <tr>
+                                    <th className="p-3">Nama</th>
+                                    <th className="p-3">NISN</th>
+                                    <th className="p-3">Sekolah</th>
+                                    <th className="p-3">Status</th>
+                                    <th className="p-3 text-center">Kontrol</th>
+                                </tr>
+                           </thead>
                            <tbody className="divide-y">
                                {getMonitoringUsers('ALL').filter(u => u.isLogin).map(u => (
                                    <tr key={u.id} className="hover:bg-gray-50">
@@ -426,10 +472,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                                {u.status === 'working' ? 'Mengerjakan' : 'Login'}
                                            </span>
                                        </td>
+                                       <td className="p-3 text-center">
+                                           <button 
+                                                title="Buka Freeze (Reset Status)" 
+                                                onClick={async () => { await db.resetUserStatus(u.id); alert('Status siswa di-reset (Unfreeze).'); loadData(); }} 
+                                                className="text-orange-600 bg-orange-50 border border-orange-200 p-1.5 rounded hover:bg-orange-100 transition"
+                                            >
+                                                <Flame size={16} />
+                                           </button>
+                                       </td>
                                    </tr>
                                ))}
                                {getMonitoringUsers('ALL').filter(u => u.isLogin).length === 0 && (
-                                   <tr><td colSpan={4} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>
+                                   <tr><td colSpan={5} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>
                                )}
                            </tbody>
                        </table>
@@ -439,7 +494,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* BANK SOAL */}
           {activeTab === 'BANK_SOAL' && (
-              <div className="space-y-6 animate-in fade-in">
+              <div className="space-y-6 animate-in fade-in print:hidden">
                   <div className="flex justify-between items-center">
                       <h3 className="font-bold text-lg">Bank Soal & Materi</h3>
                       <button onClick={handleCreateExam} className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-blue-700 flex items-center shadow-sm"><Plus size={16} className="mr-2"/> Tambah Mapel Baru</button>
@@ -455,7 +510,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                <button onClick={() => {setTargetExamForAdd(viewingQuestionsExam); setIsAddQuestionModalOpen(true);}} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-green-700 transition"><Plus size={16} className="mr-2"/> Input Manual</button>
                                <div className="h-8 w-px bg-gray-300 mx-2"></div>
                                <button onClick={downloadQuestionTemplate} className="bg-gray-600 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-gray-700 transition"><FileText size={16} className="mr-2"/> Download Template</button>
-                               <button onClick={() => triggerImportQuestions(viewingQuestionsExam.id)} className="bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-orange-600 transition"><Upload size={16} className="mr-2"/> Import CSV</button>
+                               <button onClick={() => triggerImportQuestions(viewingQuestionsExam.id)} className="bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-orange-600 transition"><Upload size={16} className="mr-2"/> Import Excel/CSV</button>
                                <button onClick={() => handleExportQuestions(viewingQuestionsExam)} className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-blue-600 transition"><Download size={16} className="mr-2"/> Export CSV</button>
                           </div>
                           <div className="space-y-3">
@@ -491,7 +546,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* MAPPING SEKOLAH */}
           {activeTab === 'MAPPING' && (
-              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
                   <h3 className="font-bold text-lg mb-4 flex items-center"><Map size={20} className="mr-2 text-blue-600"/> Mapping Jadwal & Akses Sekolah</h3>
                   <div className="overflow-x-auto">
                       <table className="w-full text-sm text-left">
@@ -537,7 +592,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* PESERTA */}
           {activeTab === 'PESERTA' && (
-               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in">
+               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
                    <div className="flex justify-between items-center mb-6">
                        <h3 className="font-bold text-lg">Data Peserta</h3>
                        <div className="flex gap-2">
@@ -577,7 +632,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* HASIL UJIAN */}
           {activeTab === 'HASIL_UJIAN' && (
-              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="font-bold text-lg">Rekap Hasil Ujian</h3>
                       <button onClick={handleExportResultsExcel} className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-green-700 shadow-sm"><FileSpreadsheet size={16} className="mr-2"/> Export Excel (.csv)</button>
@@ -623,8 +678,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
           {/* CETAK KARTU */}
           {activeTab === 'CETAK_KARTU' && (
-              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in">
-                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4">
+              <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:shadow-none print:border-none print:p-0">
+                  <div className="flex flex-col md:flex-row justify-between items-center mb-6 no-print gap-4 print:hidden">
                       <h3 className="font-bold text-lg">Cetak Kartu Peserta</h3>
                       <div className="flex flex-wrap gap-4 items-center bg-gray-50 p-3 rounded-lg border">
                           <div>
@@ -641,7 +696,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                           <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-blue-700 h-full mt-4 md:mt-0"><Printer size={16} className="mr-2"/> Print</button>
                       </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4 print:w-full">
                       {getMonitoringUsers(cardSchoolFilter).map(u => (
                           <div key={u.id} className="border-2 border-gray-800 rounded-lg p-4 flex gap-4 break-inside-avoid relative bg-white">
                               <div className="w-24 flex flex-col items-center justify-center border-r-2 border-dashed border-gray-300 pr-4">
@@ -675,7 +730,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
       {/* EDIT MODAL FOR MAPPING / SCHEDULE */}
       {isEditModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                   <h3 className="font-bold text-lg mb-4 flex items-center"><Map className="mr-2"/> Mapping Sekolah & Jadwal</h3>
                   <div className="space-y-4">
@@ -741,7 +796,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
       {/* ADD MANUAL QUESTION MODAL */}
       {isAddQuestionModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 h-[90vh] overflow-y-auto animate-in zoom-in-95">
                   <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg">Tambah Soal Manual</h3><button onClick={() => setIsAddQuestionModalOpen(false)}><X/></button></div>
                   <div className="space-y-4">

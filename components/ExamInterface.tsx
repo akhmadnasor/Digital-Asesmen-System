@@ -24,9 +24,50 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+// Helper to shuffle options inside a question and update the correctIndex map
+const processQuestionsWithShuffledOptions = (questions: Question[]): Question[] => {
+    return questions.map(q => {
+        // 1. Map options to objects to track correctness
+        const mappedOptions = q.options.map((opt, idx) => {
+            let isCorrect = false;
+            if (q.type === 'PG') {
+                isCorrect = idx === q.correctIndex;
+            } else if (['CHECKLIST', 'PG_KOMPLEKS'].includes(q.type)) {
+                isCorrect = q.correctIndices?.includes(idx) ?? false;
+            }
+            return { text: opt, isCorrect };
+        });
+
+        // 2. Shuffle the options
+        const shuffledMapped = shuffleArray(mappedOptions);
+
+        // 3. Reconstruct options array
+        const newOptions = shuffledMapped.map(m => m.text);
+
+        // 4. Find new indices for correct answers
+        let newCorrectIndex = 0;
+        let newCorrectIndices: number[] = [];
+
+        if (q.type === 'PG') {
+            newCorrectIndex = shuffledMapped.findIndex(m => m.isCorrect);
+        } else if (['CHECKLIST', 'PG_KOMPLEKS'].includes(q.type)) {
+            newCorrectIndices = shuffledMapped
+                .map((m, idx) => m.isCorrect ? idx : -1)
+                .filter(idx => idx !== -1);
+        }
+
+        return {
+            ...q,
+            options: newOptions,
+            correctIndex: newCorrectIndex,
+            correctIndices: newCorrectIndices
+        };
+    });
+};
+
 // Motivations based on score percentage
 const getMotivation = (score: number, maxScore: number, studentName: string) => {
-    const percentage = (score / maxScore) * 100;
+    const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
     if (percentage === 100) return `Luar biasa, ${studentName}! Nilai Sempurna! Pertahankan prestasimu!`;
     if (percentage >= 80) return `Hebat, ${studentName}! Hasil yang sangat memuaskan.`;
     if (percentage >= 60) return `Bagus, ${studentName}! Teruslah belajar untuk hasil yang lebih baik lagi.`;
@@ -34,8 +75,11 @@ const getMotivation = (score: number, maxScore: number, studentName: string) => 
 };
 
 export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComplete, appName, themeColor, settings }) => {
-  // Initialize Randomized Questions ONLY ONCE on mount
-  const [activeQuestions] = useState<Question[]>(() => shuffleArray(exam.questions));
+  // Initialize Randomized Questions (Order AND Options) ONLY ONCE on mount
+  const [activeQuestions] = useState<Question[]>(() => {
+      const shuffledQ = shuffleArray(exam.questions);
+      return processQuestionsWithShuffledOptions(shuffledQ);
+  });
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
@@ -392,9 +436,14 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 flex flex-col md:flex-row gap-6">
         {/* Left: Question */}
         <div className="w-full md:w-1/2 bg-white p-4">
-            {currentQ.imgUrl && (
+            {currentQ.imgUrl && currentQ.imgUrl.trim() !== '' && (
                  <div className="mb-4 max-w-sm">
-                     <img src={currentQ.imgUrl} alt="Soal" className="rounded-lg border" />
+                     <img 
+                        src={currentQ.imgUrl} 
+                        alt="Soal" 
+                        className="rounded-lg border"
+                        onError={(e) => e.currentTarget.style.display = 'none'} 
+                     />
                  </div>
             )}
             <div className={`${getFontSizeClass()} text-gray-800 leading-relaxed`}>
