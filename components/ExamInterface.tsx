@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
-import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle } from 'lucide-react';
+import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle, ShieldAlert } from 'lucide-react';
 import { db } from '../services/database'; // SWITCHED TO REAL DB
 import { Confetti } from './Confetti';
 
@@ -49,7 +49,10 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [maxPossibleScore, setMaxPossibleScore] = useState(0);
+  
+  // Anti Cheat States
   const [isFrozen, setIsFrozen] = useState(false);
+  const [freezeTimeLeft, setFreezeTimeLeft] = useState(0);
 
   useEffect(() => {
     // Calculate max possible score once
@@ -57,6 +60,8 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
     setMaxPossibleScore(max);
 
     const timer = setInterval(() => {
+      // Don't decrease exam timer if frozen? Or assume time keeps running as penalty?
+      // Usually time keeps running as penalty.
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
@@ -68,6 +73,25 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Countdown for Freeze Timer
+  useEffect(() => {
+      let interval: any;
+      if (isFrozen && freezeTimeLeft > 0) {
+          interval = setInterval(() => {
+              setFreezeTimeLeft((prev) => {
+                  if (prev <= 1) {
+                      setIsFrozen(false);
+                      return 0;
+                  }
+                  return prev - 1;
+              });
+          }, 1000);
+      } else if (freezeTimeLeft <= 0) {
+          setIsFrozen(false);
+      }
+      return () => clearInterval(interval);
+  }, [isFrozen, freezeTimeLeft]);
 
   useEffect(() => {
     if (!settings.antiCheat.isActive) return;
@@ -88,7 +112,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [cheatingAttempts, settings.antiCheat]);
+  }, [cheatingAttempts, settings.antiCheat, isFrozen, showScoreModal]);
 
   const triggerCheatingAlert = () => {
     // Only alert if exam is active (score modal not shown) and not already frozen
@@ -98,25 +122,18 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
         playAlertSound();
     }
     
-    // Freeze logic
-    if (settings.antiCheat.freezeDurationSeconds > 0) {
-        setIsFrozen(true);
-        setTimeout(() => {
-            setIsFrozen(false);
-        }, settings.antiCheat.freezeDurationSeconds * 1000);
-    }
-
-    setCheatingAttempts(prev => {
-      const newCount = prev + 1;
-      if (newCount >= 3) {
-        alert("Pelanggaran batas maksimal! Ujian dihentikan otomatis.");
-        finishExam();
-      }
-      return newCount;
-    });
+    // CALCULATE EXPONENTIAL FREEZE TIME (Jos Jis System)
+    // Attempt 1: 15s * 2^0 = 15s
+    // Attempt 2: 15s * 2^1 = 30s
+    // Attempt 3: 15s * 2^2 = 60s
+    // Attempt 4: 15s * 2^3 = 120s
+    const baseTime = settings.antiCheat.freezeDurationSeconds || 15;
+    const penaltyDuration = baseTime * Math.pow(2, cheatingAttempts);
     
-    // Use custom alert text
-    alert(`${settings.antiCheat.alertText} (Pelanggaran: ${cheatingAttempts + 1}/3)`);
+    setFreezeTimeLeft(penaltyDuration);
+    setIsFrozen(true);
+
+    setCheatingAttempts(prev => prev + 1);
   };
 
   const handleSingleChoice = (optionIndex: number) => {
@@ -273,16 +290,21 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans relative">
+    <div className="min-h-screen bg-white flex flex-col font-sans relative select-none">
       
-      {/* Frozen Overlay */}
+      {/* Frozen Overlay (JOS JIS SYSTEM) */}
       {isFrozen && (
-          <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center text-center p-8 backdrop-blur">
-              <div>
-                  <h2 className="text-3xl font-bold text-white mb-4">Sistem Terkunci</h2>
-                  <p className="text-red-400 text-lg mb-2">Terdeteksi aktivitas mencurigakan!</p>
-                  <p className="text-gray-300">Layar dibekukan selama {settings.antiCheat.freezeDurationSeconds} detik.</p>
+          <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-center p-8 backdrop-blur-xl">
+              <ShieldAlert className="w-24 h-24 text-red-500 mb-6 animate-pulse" />
+              <h2 className="text-4xl font-black text-white mb-2 uppercase tracking-widest">SISTEM TERKUNCI</h2>
+              <p className="text-red-400 text-xl mb-8 font-bold">Terdeteksi Aktivitas Mencurigakan! (Pelanggaran #{cheatingAttempts})</p>
+              
+              <div className="w-64 h-64 relative flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border-4 border-gray-700"></div>
+                  <div className="absolute inset-0 rounded-full border-t-4 border-red-500 animate-spin"></div>
+                  <div className="text-6xl font-mono font-bold text-white">{freezeTimeLeft}</div>
               </div>
+              <p className="text-gray-400 mt-8 max-w-md">Layar Anda dibekukan karena terdeteksi meninggalkan halaman ujian. Waktu pembekuan akan <strong>BERLIPAT GANDA</strong> jika Anda mengulanginya lagi.</p>
           </div>
       )}
 

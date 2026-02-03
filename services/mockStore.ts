@@ -1,3 +1,4 @@
+
 import { User, UserRole, Exam, ExamResult, AppSettings } from '../types';
 
 // Initial Mock Data
@@ -26,7 +27,7 @@ const SCHOOLS = [
 let MOCK_USERS: User[] = [
   { id: '1', name: 'Kepala Sekolah', username: 'superadmin', role: UserRole.SUPER_ADMIN, school: 'PUSAT', password: 'admin' },
   { id: '2', name: 'Admin Sekolah', username: 'admin', role: UserRole.ADMIN, school: 'PUSAT', password: 'admin' },
-  // Students from different schools
+  // Students (5 Siswa Mock Up)
   { 
     id: '3', 
     name: 'Ahmad Siswa', 
@@ -66,6 +67,32 @@ let MOCK_USERS: User[] = [
     isLocked: false,
     password: '12345'
   },
+  { 
+    id: '6', 
+    name: 'Dewi Lestari', 
+    username: 'siswa4', 
+    role: UserRole.STUDENT, 
+    grade: 6,
+    nisn: '1004',
+    school: SCHOOLS[2], // SDIT NURUL FIKRI
+    gender: 'Perempuan',
+    birthDate: '2012-03-12',
+    isLocked: false,
+    password: '12345'
+  },
+  { 
+    id: '7', 
+    name: 'Eko Prasetyo', 
+    username: 'siswa5', 
+    role: UserRole.STUDENT, 
+    grade: 6,
+    nisn: '1005',
+    school: SCHOOLS[3], // MI AL-HUDA
+    gender: 'Laki-laki',
+    birthDate: '2012-08-05',
+    isLocked: false,
+    password: '12345'
+  },
 ];
 
 // Current Date for scheduling
@@ -73,7 +100,7 @@ const now = new Date();
 const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
 const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
 
-// ONLY SD SUBJECTS - IPA REMOVED
+// MOCK EXAMS (3 Mapel: MTK, IND, IPA)
 let MOCK_EXAMS: Exam[] = [
   {
     id: 'ex-sd-mat',
@@ -85,8 +112,8 @@ let MOCK_EXAMS: Exam[] = [
     token: 'MTKSD1',
     startDate: now.toISOString(), // Ongoing
     endDate: tomorrow.toISOString(),
+    questionCount: 4,
     questions: [
-      // SOAL PG BIASA (Single Choice)
       { 
         id: 'q_mat_1', 
         type: 'PG', 
@@ -103,7 +130,6 @@ let MOCK_EXAMS: Exam[] = [
         correctIndex: 1, // 22/7 * 14 * 14 = 616
         points: 10 
       },
-      // SOAL PG KOMPLEKS (Checklist - Multiple Choice)
       { 
         id: 'q_mat_complex_1', 
         type: 'CHECKLIST', 
@@ -132,8 +158,8 @@ let MOCK_EXAMS: Exam[] = [
     token: 'INDOSD',
     startDate: now.toISOString(), 
     endDate: tomorrow.toISOString(),
+    questionCount: 4,
     questions: [
-      // SOAL PG BIASA
       { 
           id: 'q_ind_1', 
           type: 'PG', 
@@ -150,13 +176,12 @@ let MOCK_EXAMS: Exam[] = [
           correctIndex: 0, // Kalimat utama
           points: 10 
       },
-      // SOAL PG KOMPLEKS
       {
           id: 'q_ind_complex_1',
           type: 'CHECKLIST',
           text: 'Manakah di bawah ini yang termasuk penulisan kata baku yang BENAR? (Pilih dua jawaban)',
           options: ['Apotek', 'Nasehat', 'Jadwal', 'Antri'],
-          correctIndices: [0, 2], // Apotek (baku), Nasehat (tidak, harus Nasihat), Jadwal (baku), Antri (tidak, harus Antre) -> Jadi 0 dan 2
+          correctIndices: [0, 2], 
           points: 20
       },
       {
@@ -166,12 +191,58 @@ let MOCK_EXAMS: Exam[] = [
           options: [
               'Ayah pergi ke surabaya.', 
               'Presiden Jokowi meresmikan jembatan.', 
-              'ibu membeli garam inggris.', // garam inggris bukan nama geografi spesifik
+              'ibu membeli garam inggris.', 
               'Kita harus menghormati tamu.'
           ],
           correctIndices: [1, 3], 
           points: 20
       }
+    ]
+  },
+  {
+    id: 'ex-sd-ipa',
+    title: 'Ilmu Pengetahuan Alam - Paket A',
+    subject: 'Ilmu Pengetahuan Alam',
+    educationLevel: 'SD',
+    durationMinutes: 60,
+    isActive: true,
+    token: 'IPASD1',
+    startDate: now.toISOString(),
+    endDate: tomorrow.toISOString(),
+    questionCount: 4,
+    questions: [
+        {
+            id: 'q_ipa_1',
+            type: 'PG',
+            text: 'Tumbuhan yang menyimpan cadangan makanan pada akar adalah...',
+            options: ['Singkong', 'Padi', 'Mangga', 'Tebu'],
+            correctIndex: 0,
+            points: 10
+        },
+        {
+            id: 'q_ipa_2',
+            type: 'PG',
+            text: 'Hewan yang mengalami metamorfosis sempurna adalah...',
+            options: ['Kecoa', 'Belalang', 'Kupu-kupu', 'Capung'],
+            correctIndex: 2,
+            points: 10
+        },
+        {
+            id: 'q_ipa_complex_1',
+            type: 'CHECKLIST',
+            text: 'Pilihlah benda-benda yang dapat ditarik oleh magnet (Magnetis):',
+            options: ['Paku Besi', 'Karet Penghapus', 'Jarum Jahit', 'Pensil Kayu'],
+            correctIndices: [0, 2],
+            points: 20
+        },
+        {
+            id: 'q_ipa_complex_2',
+            type: 'CHECKLIST',
+            text: 'Cara menjaga kesehatan organ pernapasan adalah:',
+            options: ['Merokok', 'Olahraga teratur', 'Tidur larut malam', 'Menanam pohon di lingkungan sekitar'],
+            correctIndices: [1, 3],
+            points: 20
+        }
     ]
   }
 ];
@@ -241,6 +312,7 @@ export const mockDb = {
       const exam = MOCK_EXAMS.find(e => e.id === examId);
       if (exam) {
           exam.questions = [...exam.questions, ...questions];
+          exam.questionCount = exam.questions.length;
       }
       return Promise.resolve();
   },

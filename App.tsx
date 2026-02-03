@@ -73,8 +73,8 @@ const App: React.FC = () => {
   };
 
   const handleExamComplete = () => {
+      // Just clear active exam, let them go back to dashboard
       setActiveExam(null);
-      handleLogout();
   };
 
   const loginBgStyle = {

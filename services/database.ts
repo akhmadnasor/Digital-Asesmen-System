@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
-import { User, Exam, ExamResult, AppSettings, Question } from '../types';
+import { User, Exam, ExamResult, AppSettings, Question, UserRole } from '../types';
 
-// Default Fallback Settings if DB is empty/error
+// Hardcoded Settings (Since app_settings table is removed in new schema)
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'UJI TKA MANDIRI',
   themeColor: '#2459a9',
@@ -18,254 +18,287 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export const db = {
   getSettings: async (): Promise<AppSettings> => {
-    const { data, error } = await supabase
-      .from('app_settings')
-      .select('*')
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) {
-        return DEFAULT_SETTINGS;
-    }
-
-    return {
-        appName: data.app_name,
-        schoolLogoUrl: data.school_logo_url,
-        logoStyle: data.logo_style as any,
-        themeColor: data.theme_color,
-        gradientEndColor: data.gradient_end_color,
-        antiCheat: data.anti_cheat
-    };
+    // Return hardcoded settings as the new schema doesn't include app_settings
+    return DEFAULT_SETTINGS;
   },
 
   updateSettings: async (newSettings: Partial<AppSettings>): Promise<void> => {
-    const { data } = await supabase.from('app_settings').select('id').limit(1);
-    
-    const dbPayload: any = {};
-    if (newSettings.appName) dbPayload.app_name = newSettings.appName;
-    if (newSettings.schoolLogoUrl) dbPayload.school_logo_url = newSettings.schoolLogoUrl;
-    if (newSettings.logoStyle) dbPayload.logo_style = newSettings.logoStyle;
-    if (newSettings.themeColor) dbPayload.theme_color = newSettings.themeColor;
-    if (newSettings.gradientEndColor) dbPayload.gradient_end_color = newSettings.gradientEndColor;
-    if (newSettings.antiCheat) dbPayload.anti_cheat = newSettings.antiCheat;
-
-    if (!data || data.length === 0) {
-        await supabase.from('app_settings').insert(dbPayload);
-    } else {
-        await supabase.from('app_settings').update(dbPayload).eq('id', data[0].id);
-    }
+    // No-op since we don't have a settings table anymore
+    console.log("Settings update requested (Local Only)", newSettings);
   },
 
   login: async (input: string, password?: string): Promise<User | undefined> => {
+    const cleanInput = input.trim();
+    
+    // 1. HARDCODED ADMIN CHECK
+    if (cleanInput === 'admin' && password === 'admin') {
+        return {
+            id: 'admin-id',
+            name: 'Administrator',
+            username: 'admin',
+            role: UserRole.ADMIN,
+            school: 'PUSAT',
+            password: 'admin'
+        };
+    }
+
+    // 2. STUDENT CHECK (Table: students)
     const { data, error } = await supabase
-      .from('users')
+      .from('students')
       .select('*')
-      .or(`username.eq.${input},nisn.eq.${input}`)
+      .eq('nisn', cleanInput)
       .single();
 
     if (error || !data) return undefined;
 
-    // Check Password
+    // Verify Password
     if (data.password !== password) {
         return undefined;
     }
-    
-    // Check if account is locked
-    if (data.is_locked) {
-        alert("Akun Anda sedang terkunci. Hubungi pengawas.");
+
+    // Check Status
+    if (data.status === 'blocked') {
+        alert("Akun diblokir. Hubungi pengawas.");
         return undefined;
     }
+
+    // Update Login Status
+    await supabase.from('students').update({ is_login: true, status: 'idle' }).eq('id', data.id);
 
     return {
         id: data.id,
         name: data.name,
-        username: data.username,
-        role: data.role,
-        grade: data.grade,
-        nisn: data.nisn,
+        username: data.nisn,
+        role: UserRole.STUDENT,
         school: data.school,
-        gender: data.gender,
-        birthDate: data.birth_date,
-        isLocked: data.is_locked,
-        password: data.password // Return password for verification/display in admin panel
+        nisn: data.nisn,
+        password: data.password,
+        status: data.status,
+        isLogin: data.is_login,
+        grade: 6 // Default mapping
     };
   },
 
-  getExams: async (level?: 'SD' | 'SMP'): Promise<Exam[]> => {
-    let query = supabase.from('exams').select('*, questions(*)');
-    
-    if (level) {
-        query = query.eq('education_level', level);
-    }
-    
-    // Order by created_at descending
-    query = query.order('created_at', { ascending: false });
+  // Logout (Reset login status)
+  logout: async (userId: string): Promise<void> => {
+      if(userId !== 'admin-id') {
+          await supabase.from('students').update({ is_login: false }).eq('id', userId);
+      }
+  },
 
-    const { data, error } = await query;
+  getExams: async (level?: string): Promise<Exam[]> => {
+    // Query 'subjects' table
+    const { data: subjects, error } = await supabase
+        .from('subjects')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error("Error fetching exams:", error);
+    if (error || !subjects) {
+        console.error("Error fetching subjects:", error);
         return [];
     }
 
-    return data.map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        subject: e.subject,
-        educationLevel: e.education_level,
-        durationMinutes: e.duration_minutes,
-        isActive: e.is_active,
-        token: e.token,
-        startDate: e.start_date,
-        endDate: e.end_date,
-        questions: e.questions ? e.questions.map((q: any) => ({
-            id: q.id,
-            type: q.type,
-            text: q.text,
-            imgUrl: q.img_url,
-            options: q.options,
-            correctIndex: q.correct_index,
-            correctIndices: q.correct_indices,
-            points: q.points
-        })) : []
-    }));
+    // For each subject, fetch questions to build the object
+    const exams: Exam[] = [];
+
+    for (const sub of subjects) {
+        const { data: questions } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('subject_id', sub.id);
+        
+        const mappedQuestions: Question[] = (questions || []).map((q: any) => {
+            let cIndex = 0;
+            const keyChar = q.Kunci ? q.Kunci.trim().toUpperCase() : 'A';
+            if (keyChar === 'B') cIndex = 1;
+            if (keyChar === 'C') cIndex = 2;
+            if (keyChar === 'D') cIndex = 3;
+            
+            return {
+                id: q.id,
+                subjectId: q.subject_id,
+                nomor: q.Nomor,
+                type: (q["Tipe Soal"] as any) || 'PG',
+                text: q.Soal || '',
+                imgUrl: q["Url Gambar"] || undefined,
+                options: [
+                    q["Opsi A"] || '', 
+                    q["Opsi B"] || '', 
+                    q["Opsi C"] || '', 
+                    q["Opsi D"] || ''
+                ],
+                correctIndex: cIndex,
+                points: parseInt(q.Bobot || '10')
+            };
+        });
+
+        // Parse School Access JSONB
+        let schoolAccess: string[] = [];
+        try {
+            if (typeof sub.school_access === 'string') {
+                schoolAccess = JSON.parse(sub.school_access);
+            } else if (Array.isArray(sub.school_access)) {
+                schoolAccess = sub.school_access;
+            }
+        } catch (e) { schoolAccess = []; }
+
+        exams.push({
+            id: sub.id,
+            title: sub.name,
+            subject: sub.name,
+            educationLevel: 'SD',
+            durationMinutes: sub.duration,
+            questionCount: sub.question_count,
+            token: sub.token,
+            isActive: true,
+            questions: mappedQuestions,
+            examDate: sub.exam_date,
+            session: sub.session,
+            schoolAccess: schoolAccess
+        });
+    }
+
+    return exams;
   },
 
-  updateExamToken: async (examId: string, newToken: string): Promise<void> => {
-    await supabase.from('exams').update({ token: newToken }).eq('id', examId);
-  },
-
-  updateExamSchedule: async (examId: string, token: string, durationMinutes: number, startDate: string, endDate: string): Promise<void> => {
-    await supabase.from('exams').update({ 
+  // Updated to support Full Mapping
+  updateExamMapping: async (examId: string, token: string, durationMinutes: number, examDate: string, session: string, schoolAccess: string[]): Promise<void> => {
+    await supabase.from('subjects').update({ 
       token: token,
-      duration_minutes: durationMinutes,
-      start_date: startDate,
-      end_date: endDate 
+      duration: durationMinutes,
+      exam_date: examDate,
+      session: session,
+      school_access: schoolAccess // Supabase handles array to JSONB auto conversion
     }).eq('id', examId);
   },
 
   createExam: async (exam: Exam): Promise<void> => {
-    // 1. Insert Exam
-    const examPayload = {
-        title: exam.title,
-        subject: exam.subject,
-        education_level: exam.educationLevel,
-        duration_minutes: exam.durationMinutes,
-        is_active: exam.isActive,
-        token: exam.token,
-        start_date: exam.startDate,
-        end_date: exam.endDate
+    const payload = {
+        name: exam.title,
+        duration: exam.durationMinutes,
+        question_count: 0,
+        token: exam.token
     };
-    
-    const { data: newExam, error: examError } = await supabase.from('exams').insert(examPayload).select().single();
-    
-    if (examError || !newExam) {
-        console.error("Error creating exam", examError);
-        return;
-    }
-
-    // 2. Insert Questions if any
-    if (exam.questions.length > 0) {
-        await db.addQuestions(newExam.id, exam.questions);
-    }
+    await supabase.from('subjects').insert(payload);
   },
 
   addQuestions: async (examId: string, questions: Question[]): Promise<void> => {
-      const questionsPayload = questions.map(q => ({
-            exam_id: examId,
-            type: q.type,
-            text: q.text,
-            img_url: q.imgUrl,
-            options: q.options,
-            correct_index: q.correctIndex,
-            correct_indices: q.correctIndices,
-            points: q.points
-      }));
+      const payload = questions.map((q, idx) => {
+          const keyMap = ['A', 'B', 'C', 'D'];
+          const keyChar = q.correctIndex !== undefined ? keyMap[q.correctIndex] : 'A';
+
+          return {
+              subject_id: examId,
+              "Nomor": String(idx + 1),
+              "Tipe Soal": q.type,
+              "Jenis Soal": "UMUM",
+              "Soal": q.text,
+              "Opsi A": q.options[0] || '',
+              "Opsi B": q.options[1] || '',
+              "Opsi C": q.options[2] || '',
+              "Opsi D": q.options[3] || '',
+              "Kunci": keyChar,
+              "Bobot": String(q.points),
+              "Url Gambar": q.imgUrl || ''
+          };
+      });
       
-      const { error } = await supabase.from('questions').insert(questionsPayload);
-      if (error) console.error("Error adding questions", error);
+      const { error } = await supabase.from('questions').insert(payload);
+      if (error) throw error;
+
+      const { count } = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('subject_id', examId);
+      if (count !== null) {
+          await supabase.from('subjects').update({ question_count: count }).eq('id', examId);
+      }
   },
 
   submitResult: async (result: ExamResult): Promise<void> => {
     const payload = {
         student_id: result.studentId,
-        student_name: result.studentName,
-        exam_id: result.examId,
-        exam_title: result.examTitle,
-        score: result.score,
-        total_questions: result.totalQuestions,
-        cheating_attempts: result.cheatingAttempts,
-        submitted_at: result.submittedAt
+        subject_id: result.examId,
+        score: result.score
     };
-    await supabase.from('exam_results').insert(payload);
+    await supabase.from('results').insert(payload);
+    await supabase.from('students').update({ status: 'finished' }).eq('id', result.studentId);
   },
 
   getAllResults: async (): Promise<ExamResult[]> => {
-    const { data } = await supabase.from('exam_results').select('*').order('submitted_at', { ascending: false });
-    if (!data) return [];
+    const { data, error } = await supabase
+        .from('results')
+        .select(`
+            id, score, timestamp, student_id, subject_id,
+            students (name, school),
+            subjects (name)
+        `)
+        .order('timestamp', { ascending: false });
+
+    if (error || !data) return [];
     
     return data.map((r: any) => ({
         id: r.id,
         studentId: r.student_id,
-        studentName: r.student_name,
-        examId: r.exam_id,
-        examTitle: r.exam_title,
-        score: r.score,
-        totalQuestions: r.total_questions,
-        cheatingAttempts: r.cheating_attempts,
-        submittedAt: r.submitted_at
+        studentName: r.students?.name || 'Unknown',
+        examId: r.subject_id,
+        examTitle: r.subjects?.name || 'Unknown',
+        score: Number(r.score),
+        submittedAt: r.timestamp,
+        totalQuestions: 0, cheatingAttempts: 0
     }));
   },
 
   getUsers: async (): Promise<User[]> => {
-    const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('students').select('*').order('school', { ascending: true });
     if (!data) return [];
 
     return data.map((u: any) => ({
         id: u.id,
         name: u.name,
-        username: u.username,
-        role: u.role,
-        grade: u.grade,
+        username: u.nisn,
+        role: UserRole.STUDENT,
         nisn: u.nisn,
         school: u.school,
-        gender: u.gender,
-        birthDate: u.birth_date,
-        isLocked: u.is_locked,
-        password: u.password
+        password: u.password,
+        status: u.status,
+        isLogin: u.is_login,
+        grade: 6
     }));
   },
   
-  addUser: async (user: User): Promise<void> => {
-    let defaultPassword = '12345';
-    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
-        defaultPassword = 'admin'; 
-    }
+  importStudents: async (users: User[]): Promise<void> => {
+      const payload = users.map(u => ({
+          name: u.name,
+          nisn: u.nisn || u.username, 
+          school: u.school || 'UMUM',
+          password: u.password || '12345',
+          is_login: false,
+          status: 'idle'
+      }));
+      const { error } = await supabase.from('students').upsert(payload, { onConflict: 'nisn' });
+      if (error) throw error;
+  },
 
-    const payload = {
-        name: user.name,
-        username: user.username,
-        password: defaultPassword,
-        role: user.role,
-        grade: user.grade,
-        nisn: user.nisn,
-        school: user.school || 'UMUM',
-        gender: user.gender,
-        birth_date: user.birthDate,
-        is_locked: false
-    };
-    await supabase.from('users').insert(payload);
+  addUser: async (user: User): Promise<void> => {
+      const payload = {
+          name: user.name,
+          nisn: user.nisn || user.username,
+          school: user.school || 'UMUM',
+          password: user.password || '12345',
+          is_login: false,
+          status: 'idle'
+      };
+      const { error } = await supabase.from('students').insert(payload);
+      if (error) throw error;
   },
 
   deleteUser: async (id: string): Promise<void> => {
-    await supabase.from('users').delete().eq('id', id);
+    await supabase.from('students').delete().eq('id', id);
   },
 
   resetUserStatus: async (userId: string): Promise<void> => {
-    await supabase.from('users').update({ is_locked: false }).eq('id', userId);
+    await supabase.from('students').update({ is_login: false, status: 'idle' }).eq('id', userId);
   },
 
   resetUserPassword: async (userId: string): Promise<void> => {
-    await supabase.from('users').update({ password: '12345' }).eq('id', userId);
+    await supabase.from('students').update({ password: '12345' }).eq('id', userId);
   }
 };
