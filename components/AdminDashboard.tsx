@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, Exam, UserRole, Question, QuestionType, ExamResult, AppSettings } from '../types';
 import { db } from '../services/database'; 
 import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
   user: User;
@@ -10,7 +9,7 @@ interface AdminDashboardProps {
   appName: string;
   onSettingsChange: () => void;
   themeColor: string;
-  settings: AppSettings; // Added settings to props
+  settings: AppSettings;
 }
 
 // Fixed Logo for Card Printing
@@ -267,26 +266,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
       const processRows = (rows: any[]) => {
           const newQuestions: Question[] = rows.map((row, idx) => {
-             // Handle both CSV array row and Excel object row (if using headers)
-             // Assumption: Standard Template format
-             // CSV Parser returns array of strings. Excel Parser (sheet_to_json) returns object or array of array.
-             // Let's normalize. If it's Excel json, map keys to indices.
-             
+             // Handle CSV array row only
              let text, img, oa, ob, oc, od, key, points;
              
              if (Array.isArray(row)) {
                  if (row.length < 4) return null;
                  text = row[3]; img = row[4]; oa = row[5]; ob = row[6]; oc = row[7]; od = row[8]; key = row[9]; points = row[10];
              } else {
-                 // Try to match Keys from Template
-                 text = row['Soal'] || row['soal'];
-                 img = row['Url Gambar'] || row['url_gambar'];
-                 oa = row['Opsi A'] || row['opsi_a'];
-                 ob = row['Opsi B'] || row['opsi_b'];
-                 oc = row['Opsi C'] || row['opsi_c'];
-                 od = row['Opsi D'] || row['opsi_d'];
-                 key = row['Kunci'] || row['kunci'];
-                 points = row['Bobot'] || row['bobot'];
+                 return null;
              }
 
              if (!text) return null;
@@ -314,24 +301,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           }
       };
 
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-              const bstr = evt.target?.result;
-              const wb = XLSX.read(bstr, { type: 'binary' });
-              const wsname = wb.SheetNames[0];
-              const ws = wb.Sheets[wsname];
-              const data = XLSX.utils.sheet_to_json(ws);
-              processRows(data);
-          };
-          reader.readAsBinaryString(file);
-      } else {
-          try {
-              const text = await file.text();
-              const rows = parseCSV(text).slice(1);
-              processRows(rows);
-          } catch (e: any) { console.error(e); alert("Format Salah atau file corrupt."); }
-      }
+      try {
+          const text = await file.text();
+          const rows = parseCSV(text).slice(1);
+          processRows(rows);
+      } catch (e: any) { console.error(e); alert("Format Salah atau file corrupt."); }
+      
       e.target.value = '';
   };
 
@@ -425,7 +400,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden print:h-auto print:overflow-visible">
       <input type="file" ref={studentFileRef} className="hidden" accept=".csv" onChange={onStudentFileChange} />
-      <input type="file" ref={questionFileRef} className="hidden" accept=".csv,.xlsx,.xls" onChange={onQuestionFileChange} />
+      <input type="file" ref={questionFileRef} className="hidden" accept=".csv" onChange={onQuestionFileChange} />
 
       <aside className="w-64 flex-shrink-0 text-white flex flex-col shadow-xl z-20 transition-all duration-300 print:hidden" style={{ backgroundColor: themeColor }}>
           <div className="p-6 border-b border-white/10 flex items-center space-x-3">
@@ -532,7 +507,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                <button onClick={() => {setTargetExamForAdd(viewingQuestionsExam); setIsAddQuestionModalOpen(true);}} className="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-green-700 transition"><Plus size={16} className="mr-2"/> Input Manual</button>
                                <div className="h-8 w-px bg-gray-300 mx-2"></div>
                                <button onClick={downloadQuestionTemplate} className="bg-gray-600 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-gray-700 transition"><FileText size={16} className="mr-2"/> Download Template</button>
-                               <button onClick={() => triggerImportQuestions(viewingQuestionsExam.id)} className="bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-orange-600 transition"><Upload size={16} className="mr-2"/> Import Excel/CSV</button>
+                               <button onClick={() => triggerImportQuestions(viewingQuestionsExam.id)} className="bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-orange-600 transition"><Upload size={16} className="mr-2"/> Import CSV</button>
                                <button onClick={() => handleExportQuestions(viewingQuestionsExam)} className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center hover:bg-blue-600 transition"><Download size={16} className="mr-2"/> Export CSV</button>
                           </div>
                           <div className="space-y-3">
