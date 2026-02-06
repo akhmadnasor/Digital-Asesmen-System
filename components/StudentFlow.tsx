@@ -14,10 +14,17 @@ interface StudentFlowProps {
 type Step = 'DASHBOARD' | 'DATA_CONFIRM' | 'TEST_CONFIRM';
 
 export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onLogout, settings }) => {
-  const [step, setStep] = useState<Step>('DASHBOARD');
+  // Initialize state from sessionStorage if available
+  const [step, setStep] = useState<Step>(() => {
+      return (sessionStorage.getItem('das_student_flow_step') as Step) || 'DASHBOARD';
+  });
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(() => {
+      const saved = sessionStorage.getItem('das_student_flow_exam');
+      return saved ? JSON.parse(saved) : null;
+  });
+
   const [availableExams, setAvailableExams] = useState<Exam[]>([]);
   const [completedExams, setCompletedExams] = useState<string[]>([]);
-  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   
   // Confirmation Form State
   const [inputName, setInputName] = useState('');
@@ -27,6 +34,19 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
   useEffect(() => {
     loadExamsAndResults();
   }, [user.id]);
+
+  // Persist state changes
+  useEffect(() => {
+      sessionStorage.setItem('das_student_flow_step', step);
+  }, [step]);
+
+  useEffect(() => {
+      if (selectedExam) {
+          sessionStorage.setItem('das_student_flow_exam', JSON.stringify(selectedExam));
+      } else {
+          sessionStorage.removeItem('das_student_flow_exam');
+      }
+  }, [selectedExam]);
 
   const loadExamsAndResults = async () => {
     // 1. Get Exams (Subjects)
@@ -75,6 +95,9 @@ export const StudentFlow: React.FC<StudentFlowProps> = ({ user, onStartExam, onL
 
   const handleStartTest = () => {
     if (selectedExam) {
+      // Clear local flow persistence as we move to actual exam
+      sessionStorage.removeItem('das_student_flow_step');
+      sessionStorage.removeItem('das_student_flow_exam');
       onStartExam(selectedExam);
     }
   };

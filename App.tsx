@@ -7,7 +7,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard';
 import { StudentFlow } from './components/StudentFlow';
 import { BackgroundShapes } from './components/BackgroundShapes';
-import { LogIn, Lock, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Lock, Eye, EyeOff, Calendar, X } from 'lucide-react';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 const App: React.FC = () => {
@@ -17,6 +17,10 @@ const App: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Schedule Modal State
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [blockedSchedule, setBlockedSchedule] = useState<Exam[]>([]);
   
   // App Settings State
   const [settings, setSettings] = useState<AppSettings>({
@@ -31,6 +35,7 @@ const App: React.FC = () => {
   useEffect(() => {
     cacheManager.initialize();
     loadSettings();
+    restoreSession();
   }, []);
 
   const loadSettings = async () => {
@@ -40,6 +45,26 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to load settings", error);
     }
+  };
+
+  // PERSISTENCE LOGIC: Restore state from storage on reload
+  const restoreSession = () => {
+      try {
+          const savedUser = sessionStorage.getItem('das_user');
+          const savedExam = sessionStorage.getItem('das_exam');
+          
+          if (savedUser) {
+              const parsedUser = JSON.parse(savedUser);
+              setCurrentUser(parsedUser);
+          }
+          
+          if (savedExam) {
+              const parsedExam = JSON.parse(savedExam);
+              setActiveExam(parsedExam);
+          }
+      } catch (e) {
+          console.error("Failed to restore session", e);
+      }
   };
 
   const refreshSettings = () => {
@@ -52,29 +77,79 @@ const App: React.FC = () => {
     
     const user = await db.login(loginInput, passwordInput);
     
-    setLoading(false);
     if (user) {
+      // --- SCHEDULE CHECK LOGIC ---
+      if (user.role === UserRole.STUDENT) {
+        const allExams = await db.getExams();
+        // Get exams where this student's school is in schoolAccess
+        const myExams = allExams.filter(e => e.schoolAccess && e.schoolAccess.includes(user.school || ''));
+        
+        // Simple YYYY-MM-DD comparison for "Today"
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // Check if ANY exam is scheduled for today
+        const hasExamToday = myExams.some(e => e.examDate === todayStr);
+
+        if (!hasExamToday) {
+            // BLOCK LOGIN and Show Schedule
+            setBlockedSchedule(myExams);
+            setShowBlockedModal(true);
+            setLoading(false);
+            return; 
+        }
+
+        // If OK, proceed to trigger fullscreen
+        try {
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            } else if ((document.documentElement as any).webkitRequestFullscreen) { /* Safari */
+                await (document.documentElement as any).webkitRequestFullscreen();
+            } else if ((document.documentElement as any).msRequestFullscreen) { /* IE11 */
+                await (document.documentElement as any).msRequestFullscreen();
+            }
+        } catch (err) {
+            console.warn("Fullscreen request denied or failed:", err);
+        }
+      }
+
+      // 1. Save Session immediately
+      sessionStorage.setItem('das_user', JSON.stringify(user));
       setCurrentUser(user);
     } else {
       alert('Data tidak ditemukan atau Password salah. \nPastikan Username dan Password benar.');
     }
+    setLoading(false);
   };
 
   const handleLogout = () => {
+    // Clear Session Storage
+    sessionStorage.removeItem('das_user');
+    sessionStorage.removeItem('das_exam');
+    sessionStorage.removeItem('das_student_flow_step'); // Clear flow state too
+    sessionStorage.removeItem('das_student_flow_exam');
+
     cacheManager.clearSession();
     setCurrentUser(null);
     setActiveExam(null);
     setLoginInput('');
     setPasswordInput('');
     loadSettings(); 
+
+    // Exit Fullscreen
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => console.log(err));
+    }
   };
 
   const handleStartExam = (exam: Exam) => {
+      // Save Active Exam state
+      sessionStorage.setItem('das_exam', JSON.stringify(exam));
       setActiveExam(exam);
   };
 
   const handleExamComplete = () => {
-      // Just clear active exam, let them go back to dashboard
+      // Clear Active Exam state but keep User logged in
+      sessionStorage.removeItem('das_exam');
       setActiveExam(null);
   };
 
@@ -203,6 +278,63 @@ const App: React.FC = () => {
             onLogout={handleLogout} 
             settings={settings}
         />
+      )}
+
+      {/* JOS JIS SCHEDULE POPUP MODAL */}
+      {showBlockedModal && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300 relative">
+                  {/* Decorative Header */}
+                  <div className="h-32 relative" style={{ background: `linear-gradient(to right, ${settings.themeColor}, ${settings.gradientEndColor})` }}>
+                      <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                      <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
+                           <div className="bg-white p-2 rounded-full shadow-lg">
+                               <div className="bg-orange-100 p-3 rounded-full">
+                                    <Calendar className="text-orange-600 w-10 h-10" />
+                               </div>
+                           </div>
+                      </div>
+                      <button onClick={() => setShowBlockedModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white transition">
+                          <X size={24} />
+                      </button>
+                  </div>
+
+                  <div className="pt-16 pb-8 px-8 text-center">
+                      <h3 className="text-2xl font-extrabold text-gray-800 mb-2">Maaf, Belum Ada Jadwal</h3>
+                      <p className="text-gray-500 mb-6 text-sm">Tidak ada ujian yang aktif untuk sekolah Anda hari ini. <br/>Berikut adalah jadwal ujian Anda yang terdaftar:</p>
+                      
+                      {blockedSchedule.length > 0 ? (
+                          <div className="border rounded-xl overflow-hidden bg-gray-50 text-left max-h-60 overflow-y-auto custom-scrollbar">
+                               {blockedSchedule
+                                 .sort((a,b) => (a.examDate || '').localeCompare(b.examDate || ''))
+                                 .map((ex, idx) => (
+                                   <div key={ex.id} className="p-4 border-b last:border-0 flex justify-between items-center bg-white hover:bg-blue-50 transition">
+                                       <div>
+                                           <h4 className="font-bold text-gray-800 text-sm">{ex.title}</h4>
+                                           <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border">{ex.examDate || 'Belum diatur'}</span>
+                                                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded border border-blue-200 font-bold">{ex.session || 'Sesi 1'}</span>
+                                           </div>
+                                       </div>
+                                   </div>
+                               ))}
+                          </div>
+                      ) : (
+                          <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 text-sm font-bold">
+                              Belum ada mata ujian yang dimapping untuk sekolah Anda. Hubungi Admin.
+                          </div>
+                      )}
+
+                      <button 
+                        onClick={() => setShowBlockedModal(false)}
+                        className="w-full mt-6 py-3 rounded-xl font-bold text-white shadow-lg transition transform active:scale-95"
+                        style={{ backgroundColor: settings.themeColor }}
+                      >
+                          Mengerti
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
     </>
   );

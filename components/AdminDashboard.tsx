@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Exam, UserRole, Question, QuestionType, ExamResult, AppSettings } from '../types';
 import { db } from '../services/database'; 
-import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX } from 'lucide-react';
+import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX, Info, Check, Monitor } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: User;
@@ -91,6 +91,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [editDate, setEditDate] = useState('');
   const [editSession, setEditSession] = useState('');
   const [editSchoolAccess, setEditSchoolAccess] = useState<string[]>([]);
+  const [mappingSearch, setMappingSearch] = useState(''); // Search inside mapping modal
   
   // QUESTION BANK STATE
   const [viewingQuestionsExam, setViewingQuestionsExam] = useState<Exam | null>(null);
@@ -175,6 +176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       setEditDate(exam.examDate || new Date().toISOString().split('T')[0]);
       setEditSession(exam.session || 'Sesi 1');
       setEditSchoolAccess(exam.schoolAccess || []); // Should be array of school names
+      setMappingSearch('');
       setIsEditModalOpen(true);
   };
 
@@ -185,12 +187,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       });
   };
 
-  const toggleAllSchools = () => {
-      if (editSchoolAccess.length === schools.length) {
-          setEditSchoolAccess([]);
-      } else {
-          setEditSchoolAccess([...schools]);
-      }
+  const addAllAvailableSchools = (available: string[]) => {
+      // Add all available schools to the current selection
+      const newAccess = [...editSchoolAccess];
+      available.forEach(s => {
+          if(!newAccess.includes(s)) newAccess.push(s);
+      });
+      setEditSchoolAccess(newAccess);
   };
 
   const handleSaveMapping = async () => {
@@ -433,6 +436,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   // Monitoring Filtered Users
   const filteredMonitoringUsers = getMonitoringUsers('ALL').filter(u => u.isLogin);
 
+  // --- Calculate Available Schools for Mapping (Filtering Logic) ---
+  const getSchoolsAvailability = () => {
+      // Find schools that are busy in OTHER exams at the SAME time
+      const busySchools = new Set<string>();
+      
+      exams.forEach(ex => {
+          // Skip the current exam we are editing
+          if (editingExam && ex.id === editingExam.id) return;
+
+          // Check for collision (Same Date AND Same Session)
+          if (ex.examDate === editDate && ex.session === editSession && ex.schoolAccess) {
+              ex.schoolAccess.forEach(s => busySchools.add(s));
+          }
+      });
+
+      // Split logic:
+      // 1. Assigned (editSchoolAccess)
+      // 2. Available (schools - assigned - busy)
+      // 3. Busy (busySchools)
+      
+      const assigned = editSchoolAccess.sort();
+      
+      const available = schools.filter(s => 
+          !assigned.includes(s) && 
+          !busySchools.has(s) && 
+          s.toLowerCase().includes(mappingSearch.toLowerCase())
+      );
+
+      const busyCount = busySchools.size;
+      
+      return { assigned, available, busyCount };
+  };
+
+  const { assigned: assignedSchools, available: availableSchools, busyCount } = isEditModalOpen ? getSchoolsAvailability() : { assigned: [], available: [], busyCount: 0 };
+
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden print:h-auto print:overflow-visible">
       <input type="file" ref={studentFileRef} className="hidden" accept=".csv" onChange={onStudentFileChange} />
@@ -624,16 +662,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                       <td className="p-3 font-medium">{ex.title}</td>
                                       <td className="p-3">
                                           <div className="flex flex-col">
-                                              <span className="font-bold">{ex.examDate || '-'}</span>
-                                              <span className="text-xs text-gray-500">{ex.session || 'Sesi 1'}</span>
+                                              <span className="font-bold">{ex.examDate ? new Date(ex.examDate).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</span>
+                                              <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded w-fit mt-1">{ex.session || 'Sesi 1'}</span>
                                           </div>
                                       </td>
                                       <td className="p-3">{ex.durationMinutes} Menit</td>
                                       <td className="p-3 font-mono bg-yellow-50 font-bold">{ex.token}</td>
                                       <td className="p-3">
                                           {ex.schoolAccess && ex.schoolAccess.length > 0 ? (
-                                              <div className="flex items-center">
-                                                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">{ex.schoolAccess.length} Sekolah</span>
+                                              <div className="flex flex-wrap gap-1">
+                                                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">{ex.schoolAccess.length} Sekolah</span>
+                                                  {ex.schoolAccess.slice(0, 2).map(s => <span key={s} className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] truncate max-w-[100px]">{s}</span>)}
+                                                  {ex.schoolAccess.length > 2 && <span className="text-[10px] text-gray-400 self-center">...</span>}
                                               </div>
                                           ) : (
                                               <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs">Belum di-set</span>
@@ -959,65 +999,171 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
       {/* EDIT MODAL FOR MAPPING / SCHEDULE */}
       {isEditModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm print:hidden">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                  <h3 className="font-bold text-lg mb-4 flex items-center"><Map className="mr-2"/> Mapping Sekolah & Jadwal</h3>
-                  <div className="space-y-4">
-                      {/* Token */}
-                      <div>
-                          <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Token Ujian</label>
-                          <div className="flex gap-2">
-                              <input className="border rounded p-2 w-full font-mono uppercase font-bold text-lg tracking-wider" value={editToken} onChange={e => setEditToken(e.target.value.toUpperCase())}/>
-                              <button onClick={() => setEditToken(Math.random().toString(36).substring(2,8).toUpperCase())} className="bg-gray-100 hover:bg-gray-200 border px-3 rounded"><Shuffle size={16}/></button>
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md print:hidden">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 max-h-[90vh] overflow-hidden flex flex-col">
+                  {/* Modal Header - Jos Jis Gradient */}
+                  <div className="p-5 text-white flex justify-between items-center" style={{ background: `linear-gradient(to right, ${themeColor}, #60a5fa)` }}>
+                        <div>
+                            <h3 className="font-bold text-xl flex items-center"><Map className="mr-2" size={24}/> Mapping Jadwal & Akses</h3>
+                            <p className="text-white/80 text-sm">{editingExam?.title}</p>
+                        </div>
+                        <button onClick={() => setIsEditModalOpen(false)} className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition"><X size={20}/></button>
+                  </div>
+
+                  <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                      {/* Token & Schedule Section */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                           {/* Left Column: Token */}
+                           <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Token Ujian</label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
+                                        <input 
+                                            className="border-2 border-gray-300 rounded-lg py-2 pl-9 pr-2 w-full font-mono uppercase font-bold text-lg tracking-wider focus:border-blue-500 focus:outline-none transition text-center" 
+                                            value={editToken} 
+                                            onChange={e => setEditToken(e.target.value.toUpperCase())}
+                                        />
+                                    </div>
+                                    <button onClick={() => setEditToken(Math.random().toString(36).substring(2,8).toUpperCase())} className="bg-white border-2 border-gray-300 hover:border-blue-400 hover:text-blue-600 px-3 rounded-lg transition"><Shuffle size={20}/></button>
+                                </div>
+                           </div>
+
+                           {/* Right Column: Date & Session */}
+                           <div className="space-y-3">
+                                <div className="flex gap-3">
+                                     <div className="flex-1">
+                                         <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Tanggal</label>
+                                         <input type="date" className="border rounded-lg p-2 w-full text-sm font-medium" value={editDate} onChange={e => setEditDate(e.target.value)}/>
+                                     </div>
+                                     <div className="w-24">
+                                         <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Durasi</label>
+                                         <div className="relative">
+                                             <input type="number" className="border rounded-lg p-2 w-full text-sm font-medium pr-8" value={editDuration} onChange={e => setEditDuration(Number(e.target.value))}/>
+                                             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">m</span>
+                                         </div>
+                                     </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Sesi</label>
+                                    <select className="border rounded-lg p-2 w-full text-sm font-medium bg-white" value={editSession} onChange={e => setEditSession(e.target.value)}>
+                                        <option value="Sesi 1">Sesi 1 (Pagi)</option>
+                                        <option value="Sesi 2">Sesi 2 (Siang)</option>
+                                        <option value="Sesi 3">Sesi 3 (Sore)</option>
+                                    </select>
+                                </div>
+                           </div>
+                      </div>
+
+                      {/* --- JOS JIS MAPPING UI --- */}
+                      
+                      {/* 1. Indicators Dashboard */}
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
+                              <p className="text-[10px] uppercase font-bold text-blue-400">Total Akses</p>
+                              <p className="text-2xl font-extrabold text-blue-600 leading-none mt-1">{editSchoolAccess.length}</p>
+                          </div>
+                          <div className="bg-green-50 border border-green-100 rounded-lg p-3 text-center">
+                              <p className="text-[10px] uppercase font-bold text-green-400">Tersedia</p>
+                              <p className="text-2xl font-extrabold text-green-600 leading-none mt-1">{availableSchools.length}</p>
+                          </div>
+                          <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 text-center">
+                              <p className="text-[10px] uppercase font-bold text-orange-400">Sibuk/Bentrok</p>
+                              <p className="text-2xl font-extrabold text-orange-600 leading-none mt-1">{busyCount}</p>
                           </div>
                       </div>
 
-                      {/* Date & Duration */}
-                      <div className="grid grid-cols-2 gap-4">
-                           <div>
-                               <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Tanggal Ujian</label>
-                               <input type="date" className="border rounded p-2 w-full" value={editDate} onChange={e => setEditDate(e.target.value)}/>
-                           </div>
-                           <div>
-                               <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Durasi (Menit)</label>
-                               <input type="number" className="border rounded p-2 w-full" value={editDuration} onChange={e => setEditDuration(Number(e.target.value))}/>
-                           </div>
-                      </div>
-
-                      {/* Session */}
-                      <div>
-                          <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Sesi Ujian</label>
-                          <select className="border rounded p-2 w-full" value={editSession} onChange={e => setEditSession(e.target.value)}>
-                              <option value="Sesi 1">Sesi 1 (Pagi)</option>
-                              <option value="Sesi 2">Sesi 2 (Siang)</option>
-                              <option value="Sesi 3">Sesi 3 (Sore)</option>
-                          </select>
-                      </div>
-
-                      {/* School Mapping Checklist */}
-                      <div className="border rounded-lg bg-gray-50 overflow-hidden">
-                           <div className="bg-gray-100 p-2 border-b flex justify-between items-center">
-                               <label className="text-xs font-bold uppercase text-gray-600">Akses Sekolah (Checklist)</label>
-                               <button onClick={toggleAllSchools} className="text-xs text-blue-600 font-bold hover:underline">Pilih Semua</button>
-                           </div>
-                           <div className="p-3 max-h-40 overflow-y-auto space-y-2">
-                               {schools.length === 0 && <p className="text-xs text-center text-gray-400">Belum ada data sekolah siswa.</p>}
-                               {schools.map(s => (
-                                   <label key={s} className="flex items-center space-x-3 p-2 bg-white rounded border cursor-pointer hover:border-blue-400 transition">
-                                       <input 
-                                          type="checkbox" 
-                                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" 
-                                          checked={editSchoolAccess.includes(s)} 
-                                          onChange={() => toggleSchoolAccess(s)}
-                                       /> 
-                                       <span className="text-sm font-medium text-gray-700">{s}</span>
-                                   </label>
+                      {/* 2. Selected Schools Area (Chips) */}
+                      <div className="mb-4">
+                          <div className="flex justify-between items-center mb-2">
+                               <label className="text-sm font-bold text-gray-700 flex items-center">
+                                   <CheckSquare size={16} className="mr-2 text-blue-600"/> Sekolah Terpilih (Akses Diberikan)
+                               </label>
+                               {editSchoolAccess.length > 0 && (
+                                   <button onClick={() => setEditSchoolAccess([])} className="text-xs text-red-500 font-bold hover:underline">Hapus Semua</button>
+                               )}
+                          </div>
+                          <div className="bg-white border-2 border-blue-100 rounded-xl p-3 min-h-[80px] flex flex-wrap gap-2 content-start shadow-inner">
+                               {editSchoolAccess.length === 0 && (
+                                   <p className="text-sm text-gray-400 italic w-full text-center py-4">Belum ada sekolah yang dipilih.</p>
+                               )}
+                               {editSchoolAccess.map(s => (
+                                   <div key={s} className="group bg-blue-600 text-white pl-3 pr-1 py-1 rounded-full text-xs font-bold flex items-center shadow-sm animate-in zoom-in duration-200">
+                                       <span>{s}</span>
+                                       <button onClick={() => toggleSchoolAccess(s)} className="ml-2 p-1 hover:bg-white/20 rounded-full transition">
+                                           <X size={12}/>
+                                       </button>
+                                   </div>
                                ))}
-                           </div>
+                          </div>
                       </div>
 
-                      <button onClick={handleSaveMapping} className="bg-blue-600 text-white w-full py-2.5 rounded-lg font-bold mt-2 hover:bg-blue-700 transition shadow-sm">Simpan Mapping</button>
-                      <button onClick={() => setIsEditModalOpen(false)} className="text-gray-500 w-full py-2 text-sm hover:underline">Batal</button>
+                      {/* 3. Available Schools Area (List) */}
+                      <div>
+                           <div className="flex justify-between items-center mb-2">
+                               <label className="text-sm font-bold text-gray-700 flex items-center">
+                                   <Plus size={16} className="mr-2 text-green-600"/> Tambah Akses (Tersedia Sesi Ini)
+                               </label>
+                               {availableSchools.length > 0 && (
+                                   <button onClick={() => addAllAvailableSchools(availableSchools)} className="text-xs text-blue-600 font-bold hover:underline">Pilih Semua ({availableSchools.length})</button>
+                               )}
+                           </div>
+                           
+                           {/* Filter Search */}
+                           <div className="relative mb-2">
+                               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                               <input 
+                                   className="w-full border rounded-lg py-2 pl-9 pr-3 text-xs bg-gray-50 focus:bg-white transition outline-none focus:ring-1 focus:ring-blue-400"
+                                   placeholder="Cari nama sekolah..."
+                                   value={mappingSearch}
+                                   onChange={e => setMappingSearch(e.target.value)}
+                               />
+                           </div>
+
+                           <div className="border rounded-xl bg-gray-50 overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
+                               {availableSchools.length === 0 ? (
+                                   <div className="p-6 text-center text-gray-400 text-xs">
+                                       <Info size={24} className="mx-auto mb-2 opacity-50"/>
+                                       <p>Tidak ada sekolah tersedia untuk ditambahkan.</p>
+                                       {busyCount > 0 && <p className="mt-1 text-orange-400">({busyCount} sekolah sedang ujian mapel lain)</p>}
+                                   </div>
+                               ) : (
+                                   availableSchools.map(s => (
+                                       <div 
+                                            key={s} 
+                                            onClick={() => toggleSchoolAccess(s)}
+                                            className="flex items-center justify-between p-3 border-b last:border-0 hover:bg-blue-50 cursor-pointer transition group bg-white"
+                                       >
+                                           <div className="flex items-center space-x-3">
+                                               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs group-hover:bg-blue-200 group-hover:text-blue-700 transition">
+                                                   <School size={14}/>
+                                               </div>
+                                               <span className="text-sm font-medium text-gray-700 group-hover:text-blue-800">{s}</span>
+                                           </div>
+                                           <div className="w-5 h-5 rounded border border-gray-300 flex items-center justify-center group-hover:border-blue-500">
+                                               <Plus size={12} className="text-white group-hover:text-blue-600"/>
+                                           </div>
+                                       </div>
+                                   ))
+                               )}
+                           </div>
+
+                           {/* Busy Warning Footer */}
+                           {busyCount > 0 && (
+                               <div className="mt-2 bg-orange-50 border border-orange-100 rounded-lg p-2 flex items-center gap-2 text-xs text-orange-700">
+                                   <AlertTriangle size={14} className="flex-shrink-0"/>
+                                   <span><strong>{busyCount} Sekolah</strong> disembunyikan karena sudah ada jadwal ujian lain di sesi ini.</span>
+                               </div>
+                           )}
+                      </div>
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="p-4 bg-gray-50 border-t flex gap-3">
+                      <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold text-sm hover:bg-gray-200 rounded-xl transition">Batal</button>
+                      <button onClick={handleSaveMapping} className="flex-[2] py-3 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-xl transition transform active:scale-95 flex items-center justify-center">
+                          <Save size={18} className="mr-2"/> Simpan Perubahan
+                      </button>
                   </div>
               </div>
           </div>
