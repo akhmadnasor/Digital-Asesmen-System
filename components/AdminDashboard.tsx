@@ -117,6 +117,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [monitoringSearch, setMonitoringSearch] = useState<string>('');
   const [printDate, setPrintDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   
+  // MONITORING BULK ACTIONS
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -386,6 +389,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       if (monitoringSearch) filtered = filtered.filter(u => u.name.toLowerCase().includes(monitoringSearch.toLowerCase()) || u.nisn?.includes(monitoringSearch));
       return filtered;
   };
+  
+  // -- BULK ACTION LOGIC --
+  const toggleSelectAll = (filteredUsers: User[]) => {
+      if (selectedStudentIds.length === filteredUsers.length) {
+          setSelectedStudentIds([]);
+      } else {
+          setSelectedStudentIds(filteredUsers.map(u => u.id));
+      }
+  };
+
+  const toggleSelectOne = (id: string) => {
+      if (selectedStudentIds.includes(id)) {
+          setSelectedStudentIds(prev => prev.filter(uid => uid !== id));
+      } else {
+          setSelectedStudentIds(prev => [...prev, id]);
+      }
+  };
+
+  const handleBulkReset = async () => {
+      if (!selectedStudentIds.length) return;
+      if (!confirm(`Reset login status untuk ${selectedStudentIds.length} siswa terpilih?`)) return;
+      
+      setIsLoadingData(true);
+      for (const id of selectedStudentIds) {
+          await db.resetUserStatus(id);
+      }
+      setSelectedStudentIds([]);
+      await loadData();
+      alert("Berhasil reset masal.");
+  };
 
   // Derived Values
   const schools = (Array.from(new Set(users.map(u => u.school || 'Unknown'))).filter(Boolean) as string[]).sort();
@@ -396,6 +429,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           <Icon size={18} /><span>{label}</span>
       </button>
   );
+  
+  // Monitoring Filtered Users
+  const filteredMonitoringUsers = getMonitoringUsers('ALL').filter(u => u.isLogin);
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden print:h-auto print:overflow-visible">
@@ -446,11 +482,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           {/* MONITORING */}
           {activeTab === 'MONITORING' && (
                <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
-                   <h3 className="font-bold text-lg mb-4 flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
+                   <div className="flex justify-between items-center mb-4">
+                       <h3 className="font-bold text-lg flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
+                       {selectedStudentIds.length > 0 && (
+                           <button onClick={handleBulkReset} className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm font-bold flex items-center shadow-md animate-in fade-in hover:bg-orange-600">
+                               <Flame size={16} className="mr-1"/> Reset {selectedStudentIds.length} Siswa Terpilih
+                           </button>
+                       )}
+                   </div>
+                   
                    <div className="overflow-x-auto border rounded bg-white">
                        <table className="w-full text-sm text-left">
                            <thead className="bg-gray-50 font-bold border-b">
                                 <tr>
+                                    <th className="p-3 w-10 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 rounded cursor-pointer"
+                                            checked={filteredMonitoringUsers.length > 0 && selectedStudentIds.length === filteredMonitoringUsers.length}
+                                            onChange={() => toggleSelectAll(filteredMonitoringUsers)}
+                                        />
+                                    </th>
                                     <th className="p-3">Nama</th>
                                     <th className="p-3">NISN</th>
                                     <th className="p-3">Sekolah</th>
@@ -459,8 +511,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                 </tr>
                            </thead>
                            <tbody className="divide-y">
-                               {getMonitoringUsers('ALL').filter(u => u.isLogin).map(u => (
+                               {filteredMonitoringUsers.map(u => (
                                    <tr key={u.id} className="hover:bg-gray-50">
+                                       <td className="p-3 text-center">
+                                           <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded cursor-pointer"
+                                                checked={selectedStudentIds.includes(u.id)}
+                                                onChange={() => toggleSelectOne(u.id)}
+                                           />
+                                       </td>
                                        <td className="p-3">{u.name}</td>
                                        <td className="p-3 font-mono">{u.nisn}</td>
                                        <td className="p-3">{u.school}</td>
@@ -480,15 +540,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                        </td>
                                    </tr>
                                ))}
-                               {getMonitoringUsers('ALL').filter(u => u.isLogin).length === 0 && (
-                                   <tr><td colSpan={5} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>
+                               {filteredMonitoringUsers.length === 0 && (
+                                   <tr><td colSpan={6} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>
                                )}
                            </tbody>
                        </table>
                    </div>
                </div>
           )}
-
+          
+          {/* ... Rest of existing tabs (BANK_SOAL, MAPPING, PESERTA, HASIL_UJIAN, CETAK_KARTU, ANTI_CHEAT) - No Logic Changes needed, but kept in context of previous file ... */}
           {/* BANK SOAL */}
           {activeTab === 'BANK_SOAL' && (
               <div className="space-y-6 animate-in fade-in print:hidden">

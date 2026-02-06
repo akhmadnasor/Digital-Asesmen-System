@@ -8,6 +8,7 @@ import { SuperAdminDashboard } from './components/SuperAdminDashboard';
 import { StudentFlow } from './components/StudentFlow';
 import { BackgroundShapes } from './components/BackgroundShapes';
 import { LogIn, Lock, Eye, EyeOff } from 'lucide-react';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -81,138 +82,129 @@ const App: React.FC = () => {
     background: `linear-gradient(to bottom, ${settings.themeColor}, ${settings.gradientEndColor})`
   };
 
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen relative font-sans overflow-hidden" style={loginBgStyle}>
-        
-        <BackgroundShapes />
-
-        <header className="fixed top-0 w-full z-50 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                    <div className="bg-white p-1 rounded-full shadow">
-                        <img 
-                            src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
-                            className="h-10 w-10" 
-                            alt="Logo Kemdikbud"
-                        />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-extrabold text-white tracking-wide drop-shadow-sm">{settings.appName}</h1>
-                        <p className="text-xs text-blue-100 opacity-90">Digital Assessment System (DAS) - Jenjang SD</p>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <div className="min-h-screen flex items-center justify-center p-4 pt-20">
-            <div className="bg-white/95 backdrop-blur-sm p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md relative z-10 border border-white/50 animate-in zoom-in-95 duration-500">
-            
-            <div className="flex justify-center mb-6">
-                 <img 
-                    src="https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm" 
-                    className="w-40 h-auto object-contain animate-float-slow filter drop-shadow-xl" 
-                    alt="Logo Uji TKA Mandiri" 
-                    referrerPolicy="no-referrer"
-                 />
-            </div>
-            
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-1">Selamat Datang</h2>
-            <p className="text-gray-500 text-center mb-8 text-sm">Silakan login untuk memulai ujian</p>
-
-            <form onSubmit={handleLogin} className="space-y-5">
-                <div>
-                    <label className="block text-gray-700 text-sm font-bold mb-2">NISN / Username</label>
-                    <div className="relative">
-                        <UserCircleIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
-                        <input 
-                            type="text"
-                            placeholder="NISN / Username" 
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-4 focus:ring-blue-100 outline-none transition text-gray-700"
-                            style={{ borderColor: settings.themeColor }}
-                            value={loginInput}
-                            onChange={(e) => setLoginInput(e.target.value)}
-                        />
-                    </div>
-                </div>
-                
-                <div>
-                    <label className="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                    <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
-                        <input 
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Password" 
-                            className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:ring-4 focus:ring-blue-100 outline-none transition text-gray-700"
-                            style={{ borderColor: settings.themeColor }}
-                            value={passwordInput}
-                            onChange={(e) => setPasswordInput(e.target.value)}
-                        />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                    </div>
-                </div>
-
-                <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full text-white font-bold py-3.5 rounded-lg shadow-lg transition transform active:scale-95 flex items-center justify-center mt-4"
-                style={{ background: `linear-gradient(to right, ${settings.themeColor}, ${settings.gradientEndColor})` }}
-                >
-                {loading ? 'Memuat...' : <><LogIn className="mr-2" size={18}/> Masuk</>}
-                </button>
-            </form>
-            </div>
-        </div>
-
-        <div className="fixed bottom-6 w-full text-center z-20 pointer-events-none">
-            <span className="inline-block bg-white/80 backdrop-blur rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg border border-white/50" style={{ color: settings.themeColor }}>
-               Digital Assessment System (DAS) @2026 | akhmadnasor
-            </span>
-        </div>
-
-      </div>
-    );
-  }
-
-  if (currentUser.role === UserRole.SUPER_ADMIN) {
-    return <SuperAdminDashboard user={currentUser} onLogout={handleLogout} settings={settings} onSettingsChange={refreshSettings} />;
-  }
-
-  if (currentUser.role === UserRole.ADMIN) {
-    return (
-      <AdminDashboard 
-        user={currentUser} 
-        onLogout={handleLogout} 
-        appName={settings.appName} 
-        onSettingsChange={refreshSettings} 
-        themeColor={settings.themeColor} 
-        settings={settings} // Added Prop
-      />
-    );
-  }
-
-  if (activeExam) {
-    return (
-      <ExamInterface 
-        user={currentUser} 
-        exam={activeExam} 
-        onComplete={handleExamComplete} 
-        appName={settings.appName}
-        themeColor={settings.themeColor}
-        settings={settings}
-      />
-    );
-  }
-
   return (
-    <StudentFlow 
-        user={currentUser} 
-        onStartExam={handleStartExam} 
-        onLogout={handleLogout} 
-        settings={settings}
-    />
+    <>
+      <PWAInstallPrompt />
+      {!currentUser ? (
+        <div className="min-h-screen relative font-sans overflow-hidden" style={loginBgStyle}>
+          
+          <BackgroundShapes />
+
+          <header className="fixed top-0 w-full z-50 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-sm">
+              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                      <div className="bg-white p-1 rounded-full shadow">
+                          <img 
+                              src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_of_Ministry_of_Education_and_Culture_of_Republic_of_Indonesia.svg" 
+                              className="h-10 w-10" 
+                              alt="Logo Kemdikbud"
+                          />
+                      </div>
+                      <div>
+                          <h1 className="text-xl font-extrabold text-white tracking-wide drop-shadow-sm">{settings.appName}</h1>
+                          <p className="text-xs text-blue-100 opacity-90">Digital Assessment System (DAS) - Jenjang SD</p>
+                      </div>
+                  </div>
+              </div>
+          </header>
+
+          <div className="min-h-screen flex items-center justify-center p-4 pt-20">
+              <div className="bg-white/95 backdrop-blur-sm p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md relative z-10 border border-white/50 animate-in zoom-in-95 duration-500">
+              
+              <div className="flex justify-center mb-6">
+                  <img 
+                      src="https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm" 
+                      className="w-40 h-auto object-contain animate-float-slow filter drop-shadow-xl" 
+                      alt="Logo Uji TKA Mandiri" 
+                      referrerPolicy="no-referrer"
+                  />
+              </div>
+              
+              <h2 className="text-2xl font-bold text-center text-gray-800 mb-1">Selamat Datang</h2>
+              <p className="text-gray-500 text-center mb-8 text-sm">Silakan login untuk memulai ujian</p>
+
+              <form onSubmit={handleLogin} className="space-y-5">
+                  <div>
+                      <label className="block text-gray-700 text-sm font-bold mb-2">NISN / Username</label>
+                      <div className="relative">
+                          <UserCircleIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
+                          <input 
+                              type="text"
+                              placeholder="NISN / Username" 
+                              className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-4 focus:ring-blue-100 outline-none transition text-gray-700"
+                              style={{ borderColor: settings.themeColor }}
+                              value={loginInput}
+                              onChange={(e) => setLoginInput(e.target.value)}
+                          />
+                      </div>
+                  </div>
+                  
+                  <div>
+                      <label className="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                      <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
+                          <input 
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Password" 
+                              className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:ring-4 focus:ring-blue-100 outline-none transition text-gray-700"
+                              style={{ borderColor: settings.themeColor }}
+                              value={passwordInput}
+                              onChange={(e) => setPasswordInput(e.target.value)}
+                          />
+                          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                      </div>
+                  </div>
+
+                  <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full text-white font-bold py-3.5 rounded-lg shadow-lg transition transform active:scale-95 flex items-center justify-center mt-4"
+                  style={{ background: `linear-gradient(to right, ${settings.themeColor}, ${settings.gradientEndColor})` }}
+                  >
+                  {loading ? 'Memuat...' : <><LogIn className="mr-2" size={18}/> Masuk</>}
+                  </button>
+              </form>
+              </div>
+          </div>
+
+          <div className="fixed bottom-6 w-full text-center z-20 pointer-events-none">
+              <span className="inline-block bg-white/80 backdrop-blur rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg border border-white/50" style={{ color: settings.themeColor }}>
+                Digital Assessment System (DAS) @2026 | akhmadnasor
+              </span>
+          </div>
+
+        </div>
+      ) : currentUser.role === UserRole.SUPER_ADMIN ? (
+        <SuperAdminDashboard user={currentUser} onLogout={handleLogout} settings={settings} onSettingsChange={refreshSettings} />
+      ) : currentUser.role === UserRole.ADMIN ? (
+        <AdminDashboard 
+          user={currentUser} 
+          onLogout={handleLogout} 
+          appName={settings.appName} 
+          onSettingsChange={refreshSettings} 
+          themeColor={settings.themeColor} 
+          settings={settings}
+        />
+      ) : activeExam ? (
+        <ExamInterface 
+          user={currentUser} 
+          exam={activeExam} 
+          onComplete={handleExamComplete} 
+          appName={settings.appName}
+          themeColor={settings.themeColor}
+          settings={settings}
+        />
+      ) : (
+        <StudentFlow 
+            user={currentUser} 
+            onStartExam={handleStartExam} 
+            onLogout={handleLogout} 
+            settings={settings}
+        />
+      )}
+    </>
   );
 };
 

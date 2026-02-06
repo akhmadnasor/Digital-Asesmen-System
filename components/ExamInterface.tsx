@@ -15,14 +15,14 @@ interface ExamInterfaceProps {
 }
 
 // Fisher-Yates Shuffle Algorithm
-const shuffleArray = <T,>(array: T[]): T[] => {
+function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
-};
+}
 
 // Helper to shuffle options inside a question and update the correctIndex map
 const processQuestionsWithShuffledOptions = (questions: Question[]): Question[] => {
@@ -77,11 +77,19 @@ const getMotivation = (score: number, maxScore: number, studentName: string) => 
 export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComplete, appName, themeColor, settings }) => {
   // Initialize Randomized Questions (Order AND Options) ONLY ONCE on mount
   const [activeQuestions] = useState<Question[]>(() => {
-      const shuffledQ = shuffleArray(exam.questions);
+      // Ensure exam.questions is an array
+      const questionsSource = exam.questions || [];
+      const shuffledQ = shuffleArray(questionsSource);
       return processQuestionsWithShuffledOptions(shuffledQ);
   });
   
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  // PERSISTENCE LOGIC: Get last index from storage
+  const storageKey = `das_progress_${user.id}_${exam.id}`;
+  
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => {
+     const saved = localStorage.getItem(storageKey);
+     return saved ? parseInt(saved, 10) : 0;
+  });
   
   // State for different answer types
   const [answers, setAnswers] = useState<any[]>(new Array(activeQuestions.length).fill(null));
@@ -94,12 +102,20 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   const [finalScore, setFinalScore] = useState(0);
   const [maxPossibleScore, setMaxPossibleScore] = useState(0);
   
+  // UI State
+  const [showQuestionListModal, setShowQuestionListModal] = useState(false);
+
   // Anti Cheat States
   const [isFrozen, setIsFrozen] = useState(false);
   const [freezeTimeLeft, setFreezeTimeLeft] = useState(0);
 
   // Lightbox State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Persistence Effect
+  useEffect(() => {
+      localStorage.setItem(storageKey, currentQuestionIndex.toString());
+  }, [currentQuestionIndex, storageKey]);
 
   useEffect(() => {
     // Calculate max possible score once
@@ -238,6 +254,9 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   const finishExam = async () => {
     const score = calculateScore();
     setFinalScore(score);
+    
+    // Clear persistence on finish
+    localStorage.removeItem(storageKey);
 
     const result: ExamResult = {
       id: `res-${Date.now()}`,
@@ -375,6 +394,54 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
         </div>
       )}
 
+      {/* QUESTION LIST MODAL (Daftar Soal JOS JIS) */}
+      {showQuestionListModal && (
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm flex justify-end" onClick={() => setShowQuestionListModal(false)}>
+              <div 
+                  className="bg-white w-full md:w-96 h-full shadow-2xl p-6 overflow-y-auto animate-in slide-in-from-right duration-300 relative"
+                  onClick={e => e.stopPropagation()}
+              >
+                  <div className="flex justify-between items-center mb-6 border-b pb-4">
+                      <h3 className="text-xl font-bold text-gray-800">Daftar Soal</h3>
+                      <button onClick={() => setShowQuestionListModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition"><X/></button>
+                  </div>
+                  
+                  <div className="grid grid-cols-5 gap-3">
+                      {activeQuestions.map((q, idx) => {
+                          const isAnswered = answers[idx] !== null && answers[idx] !== undefined && (Array.isArray(answers[idx]) ? answers[idx].length > 0 : String(answers[idx]).trim() !== '');
+                          const isCurrent = currentQuestionIndex === idx;
+                          const isDoubt = markedDoubts[idx];
+                          
+                          let bgClass = 'bg-white border-gray-300 text-gray-700';
+                          if (isCurrent) bgClass = 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-300';
+                          else if (isDoubt) bgClass = 'bg-yellow-400 text-black border-yellow-500 font-bold';
+                          else if (isAnswered) bgClass = 'bg-green-500 text-white border-green-600';
+
+                          return (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                    setCurrentQuestionIndex(idx);
+                                    setShowQuestionListModal(false);
+                                }}
+                                className={`w-full aspect-square flex items-center justify-center rounded-lg border-2 text-sm font-bold transition hover:scale-105 active:scale-95 shadow-sm ${bgClass}`}
+                              >
+                                  {idx + 1}
+                              </button>
+                          )
+                      })}
+                  </div>
+
+                  <div className="mt-8 pt-4 border-t space-y-2 text-xs text-gray-600 font-medium">
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded border border-green-600"></div> Sudah Dijawab</div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-400 rounded border border-yellow-500"></div> Ragu-ragu</div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 bg-white rounded border border-gray-300"></div> Belum Dijawab</div>
+                      <div className="flex items-center gap-2"><div className="w-4 h-4 bg-blue-600 rounded border border-blue-600"></div> Sedang Dikerjakan</div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Frozen Overlay (JOS JIS SYSTEM) */}
       {isFrozen && (
           <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-center p-8 backdrop-blur-xl">
@@ -465,7 +532,10 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
               </div>
           </div>
           <div className="flex items-center space-x-2">
-               <button className="flex items-center px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 text-gray-700">
+               <button 
+                onClick={() => setShowQuestionListModal(true)}
+                className="flex items-center px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50 text-gray-700 shadow-sm active:bg-gray-100"
+               >
                    <Grid3X3 size={16} className="mr-1"/> Daftar Soal
                </button>
           </div>
