@@ -549,7 +549,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                </div>
           )}
           
-          {/* ... Rest of existing tabs (BANK_SOAL, MAPPING, PESERTA, HASIL_UJIAN, CETAK_KARTU, ANTI_CHEAT) - No Logic Changes needed, but kept in context of previous file ... */}
+          {/* ... Rest of existing tabs ... */}
           {/* BANK SOAL */}
           {activeTab === 'BANK_SOAL' && (
               <div className="space-y-6 animate-in fade-in print:hidden">
@@ -734,7 +734,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
               </div>
           )}
 
-          {/* CETAK KARTU - "JOS JIS" MODE */}
+          {/* CETAK KARTU - "JOS JIS" MODE A4 PRECISE */}
           {activeTab === 'CETAK_KARTU' && (
               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:shadow-none print:border-none print:p-0">
                   {/* Toolbar - Hidden when Printing */}
@@ -760,64 +760,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
                   {/* Printable Area - ID used in CSS to show ONLY this */}
                   <div id="printable-area">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 print-grid">
+                    <div className="print-grid">
                         {getMonitoringUsers(cardSchoolFilter).map(u => (
-                            <div key={u.id} className="card-container bg-white border-2 border-gray-800 p-0 relative break-inside-avoid flex overflow-hidden h-[9cm] w-full" style={{ borderRadius: '4px' }}>
-                                {/* Decorative "Watermark" Background */}
+                            <div key={u.id} className="card-container bg-white relative flex overflow-hidden">
+                                
+                                {/* Watermark Background */}
                                 <div className="absolute inset-0 opacity-5 flex items-center justify-center pointer-events-none z-0">
-                                     <img src={FIXED_LOGO_URL} className="w-48 h-48 object-contain grayscale" />
+                                     <img src={FIXED_LOGO_URL} className="w-32 h-32 object-contain grayscale" />
                                 </div>
                                 
                                 <div className="z-10 flex w-full h-full relative">
-                                    {/* Left Column: Photo & Logo */}
-                                    <div className="w-32 bg-gray-50 border-r-2 border-gray-800 flex flex-col items-center p-3 text-center">
-                                        <img src={FIXED_LOGO_URL} className="w-16 h-16 object-contain mb-4 mix-blend-multiply" alt="Logo"/>
-                                        <div className="w-24 h-32 border-2 border-dashed border-gray-400 bg-white flex items-center justify-center mb-2">
-                                            <span className="text-[10px] text-gray-400 font-bold">FOTO 3x4</span>
+                                    {/* Left Column: Logo & Photo & Signature */}
+                                    <div className="w-[30%] border-r-2 border-dashed border-gray-400 flex flex-col items-center justify-between p-2 text-center bg-gray-50/30">
+                                        <div className="mt-1">
+                                            <img src={FIXED_LOGO_URL} className="w-10 h-10 object-contain mix-blend-multiply" alt="Logo"/>
                                         </div>
-                                        <p className="text-[9px] font-bold text-gray-500 uppercase">Tanda Tangan</p>
+                                        
+                                        <div className="w-full flex-1 flex flex-col items-center justify-center my-1">
+                                            <div className="w-[20mm] h-[25mm] border border-gray-400 bg-white flex items-center justify-center shadow-inner">
+                                                <span className="text-[8px] text-gray-300 font-bold transform -rotate-12 whitespace-nowrap">FOTO 3x4</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="mb-1 w-full border-t border-gray-400 pt-1">
+                                            <div className="h-4"></div> {/* Space for signature */}
+                                            <p className="text-[7px] font-bold text-gray-500 uppercase">Tanda Tangan</p>
+                                        </div>
                                     </div>
 
                                     {/* Right Column: Details */}
-                                    <div className="flex-1 p-3 flex flex-col justify-between">
+                                    <div className="flex-1 p-2 flex flex-col justify-between">
                                         {/* Header */}
-                                        <div className="border-b-2 border-gray-800 pb-2 mb-2">
-                                            <h2 className="font-black text-lg text-gray-900 leading-none">KARTU PESERTA</h2>
-                                            <p className="text-xs font-bold text-gray-600 tracking-widest uppercase">UJI TKA MANDIRI</p>
+                                        <div className="border-b-2 border-gray-800 pb-1 mb-1">
+                                            <h2 className="font-black text-sm text-gray-900 leading-none mb-0.5 uppercase">KARTU PESERTA</h2>
+                                            <p className="text-[8px] font-bold text-gray-600 tracking-widest uppercase">UJI TKA MANDIRI</p>
                                         </div>
 
                                         {/* Info Table */}
-                                        <div className="flex-1 space-y-1.5 text-xs text-gray-800 font-medium">
-                                            <div className="flex">
-                                                <span className="w-20 font-bold text-gray-500">NAMA</span>
-                                                <span className="font-bold uppercase truncate">: {u.name}</span>
+                                        <div className="flex-1 space-y-0.5 text-[9px] text-gray-900 font-medium mt-0.5">
+                                            <div className="flex items-start">
+                                                <span className="w-14 font-bold text-gray-500">NAMA</span>
+                                                <span className="font-bold uppercase flex-1 leading-tight truncate">: {u.name}</span>
                                             </div>
-                                            <div className="flex">
-                                                <span className="w-20 font-bold text-gray-500">NISN</span>
+                                            <div className="flex items-center">
+                                                <span className="w-14 font-bold text-gray-500">NISN</span>
                                                 <span className="font-mono font-bold">: {u.nisn || u.username}</span>
                                             </div>
-                                            <div className="flex">
-                                                <span className="w-20 font-bold text-gray-500">PASSWORD</span>
-                                                <span className="font-mono font-bold bg-gray-100 px-1">: {u.password}</span>
+                                            <div className="flex items-center">
+                                                <span className="w-14 font-bold text-gray-500">PASS</span>
+                                                <span className="font-mono font-bold bg-gray-100 px-1 border border-gray-200 rounded">: {u.password}</span>
                                             </div>
-                                            <div className="flex">
-                                                <span className="w-20 font-bold text-gray-500">SEKOLAH</span>
-                                                <span className="truncate">: {u.school || '-'}</span>
+                                            <div className="flex items-start">
+                                                <span className="w-14 font-bold text-gray-500">SEKOLAH</span>
+                                                <span className="flex-1 truncate leading-tight">: {u.school || '-'}</span>
                                             </div>
-                                            <div className="flex">
-                                                <span className="w-20 font-bold text-gray-500">SESI</span>
+                                            <div className="flex items-center">
+                                                <span className="w-14 font-bold text-gray-500">SESI</span>
                                                 <span>: 1 (07.30 - 09.30)</span>
                                             </div>
                                         </div>
 
                                         {/* Footer */}
-                                        <div className="mt-2 pt-2 border-t border-gray-300 flex justify-between items-end">
-                                            <div className="text-[9px] text-gray-400 italic">
-                                                *Bawa kartu ini saat ujian berlangsung.
+                                        <div className="mt-1 pt-1 border-t border-gray-200 flex justify-between items-end">
+                                            <div className="text-[7px] text-gray-400 italic max-w-[100px] leading-tight">
+                                                *Bawa kartu saat ujian.
                                             </div>
-                                            <div className="text-center">
-                                                <p className="text-[9px] text-gray-500 mb-4">Jakarta, {new Date(printDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', day: 'numeric' })}</p>
-                                                <p className="text-[10px] font-bold underline">Panitia Pelaksana</p>
+                                            <div className="text-center min-w-[80px]">
+                                                <p className="text-[7px] text-gray-600 mb-2 leading-none">
+                                                    Pasuruan, {new Date(printDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}
+                                                </p>
+                                                <p className="text-[7px] font-bold underline">Panitia Pelaksana</p>
                                             </div>
                                         </div>
                                     </div>

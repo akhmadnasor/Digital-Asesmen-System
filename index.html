@@ -97,7 +97,7 @@
           visibility: visible;
         }
 
-        /* Position the wrapper at the very top-left */
+        /* Position the wrapper */
         #printable-area {
           position: absolute;
           left: 0;
@@ -119,17 +119,24 @@
           display: none;
         }
         
-        /* Ensure Grid works in print */
+        /* Grid System for Cards - Optimized for A4 (2 columns) */
         .print-grid {
           display: grid !important;
-          grid-template-columns: repeat(2, 1fr) !important; /* 2 Cards per row */
-          gap: 1.5cm !important; /* Gap between cards */
+          grid-template-columns: repeat(2, 1fr) !important; 
+          gap: 5mm !important; /* Space between cards reduced for better fit */
+          row-gap: 5mm !important;
         }
 
+        /* The Card Container - Strict Sizing */
         .card-container {
           break-inside: avoid;
           page-break-inside: avoid;
-          border: 1px dashed #ccc; /* Cutting line */
+          border: 1px dashed #666; /* Thinner cutting line */
+          height: 85mm; /* Slightly shorter to fit 3 rows comfortably if needed, or 85mm standard */
+          width: 100%;
+          box-sizing: border-box;
+          overflow: hidden; /* Prevent content overflow */
+          position: relative;
         }
       }
     </style>

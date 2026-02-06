@@ -78,7 +78,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   // Initialize Randomized Questions (Order AND Options) ONLY ONCE on mount
   const [activeQuestions] = useState<Question[]>(() => {
       // Ensure exam.questions is an array
-      const questionsSource = exam.questions || [];
+      const questionsSource: Question[] = exam.questions || [];
       const shuffledQ = shuffleArray(questionsSource);
       return processQuestionsWithShuffledOptions(shuffledQ);
   });
