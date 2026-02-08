@@ -1,7 +1,7 @@
 {
   "name": "TKA",
   "short_name": "TKA",
-  "start_url": ".",
+  "start_url": "https://digitalasesemensystem.netlify.app/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",

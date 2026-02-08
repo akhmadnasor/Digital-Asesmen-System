@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Exam, UserRole, Question, QuestionType, ExamResult, AppSettings } from '../types';
 import { db } from '../services/database'; 
-import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX, Info, Check, Monitor } from 'lucide-react';
+import { Plus, BookOpen, Save, LogOut, Loader2, Key, RotateCcw, Clock, Upload, Download, FileText, LayoutDashboard, Settings, Printer, Filter, Calendar, FileSpreadsheet, Lock, Link, Edit, ShieldAlert, Activity, ClipboardList, Search, Unlock, Trash2, Database, School, Shuffle, X, CheckSquare, Map, CalendarDays, Flame, Volume2, AlertTriangle, UserX, Info, Check, Monitor, Users, GraduationCap, CheckCircle, XCircle, ArrowLeft, BarChart3, PieChart, Menu } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: User;
@@ -14,10 +14,6 @@ interface AdminDashboardProps {
 
 // Fixed Logo for Card Printing
 const FIXED_LOGO_URL = "https://lh3.googleusercontent.com/d/1UXDrhKgeSjfFks_oXIMOVYgxFG_Bh1nm";
-
-const getExamStatus = (exam: Exam) => {
-    return 'active'; 
-};
 
 // --- ROBUST CSV PARSER ---
 const parseCSV = (text: string): string[][] => {
@@ -77,6 +73,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   // TABS
   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'MONITORING' | 'HASIL_UJIAN' | 'BANK_SOAL' | 'MAPPING' | 'PESERTA' | 'CETAK_KARTU' | 'ANTI_CHEAT'>('DASHBOARD');
   
+  // DASHBOARD DRILL-DOWN VIEWS
+  const [dashboardView, setDashboardView] = useState<'MAIN' | 'STUDENTS_DETAIL' | 'SCHOOLS_DETAIL' | 'EXAMS_DETAIL'>('MAIN');
+
   // ANTI CHEAT STATE
   const [acActive, setAcActive] = useState(settings.antiCheat.isActive);
   const [acFreeze, setAcFreeze] = useState(settings.antiCheat.freezeDurationSeconds);
@@ -91,7 +90,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [editDate, setEditDate] = useState('');
   const [editSession, setEditSession] = useState('');
   const [editSchoolAccess, setEditSchoolAccess] = useState<string[]>([]);
-  const [mappingSearch, setMappingSearch] = useState(''); // Search inside mapping modal
+  const [mappingSearch, setMappingSearch] = useState(''); 
   
   // QUESTION BANK STATE
   const [viewingQuestionsExam, setViewingQuestionsExam] = useState<Exam | null>(null);
@@ -113,6 +112,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   
   // FILTERS & CARD PRINTING
   const [selectedSchoolFilter, setSelectedSchoolFilter] = useState<string>('ALL'); // For Peserta & Monitoring
+  const [dashboardSchoolFilter, setDashboardSchoolFilter] = useState<string>('ALL'); // For Dashboard Details
   const [resultSchoolFilter, setResultSchoolFilter] = useState<string>('ALL'); // For Results
   const [cardSchoolFilter, setCardSchoolFilter] = useState<string>('ALL'); // For Cards
   const [monitoringSearch, setMonitoringSearch] = useState<string>('');
@@ -120,6 +120,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   
   // MONITORING BULK ACTIONS
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  // MOBILE SIDEBAR STATE
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -131,11 +134,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
     const u = await db.getUsers();
     const r = await db.getAllResults();
     setExams(e);
-    setUsers(u); // All users are students in new schema
+    setUsers(u); 
     setResults(r);
     setIsLoadingData(false);
   };
 
+  // --- ACTIONS ---
   const handleSaveAntiCheat = async () => {
       await db.updateSettings({
           antiCheat: {
@@ -168,14 +172,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       loadData();
   };
 
-  // --- MAPPING / SCHEDULE LOGIC ---
+  // --- MAPPING LOGIC ---
   const openMappingModal = (exam: Exam) => {
       setEditingExam(exam);
       setEditToken(exam.token);
       setEditDuration(exam.durationMinutes);
       setEditDate(exam.examDate || new Date().toISOString().split('T')[0]);
       setEditSession(exam.session || 'Sesi 1');
-      setEditSchoolAccess(exam.schoolAccess || []); // Should be array of school names
+      setEditSchoolAccess(exam.schoolAccess || []); 
       setMappingSearch('');
       setIsEditModalOpen(true);
   };
@@ -188,7 +192,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   };
 
   const addAllAvailableSchools = (available: string[]) => {
-      // Add all available schools to the current selection
       const newAccess = [...editSchoolAccess];
       available.forEach(s => {
           if(!newAccess.includes(s)) newAccess.push(s);
@@ -214,7 +217,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       alert("Mapping Jadwal & Akses Sekolah berhasil diperbarui!");
   };
 
-  // --- QUESTION BANK LOGIC ---
+  // --- QUESTION BANK & IMPORT/EXPORT ---
   const handleSaveQuestion = async () => {
       if (!targetExamForAdd) return;
       if (!nqText.trim()) return alert("Teks soal wajib diisi!");
@@ -233,9 +236,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       alert("Soal berhasil ditambahkan!");
   };
 
-  // --- IMPORT/EXPORT LOGIC ---
   const downloadQuestionTemplate = () => {
-      // Template matched with parser logic (Header Row + Example Row)
       const headers = "No,Tipe,Jenis,Soal,Url Gambar,Opsi A,Opsi B,Opsi C,Opsi D,Kunci,Bobot";
       const example1 = "1,PG,UMUM,Siapa presiden pertama RI?,,Soekarno,Hatta,Habibie,Gus Dur,A,10";
       const blob = new Blob([headers + "\n" + example1], { type: 'text/csv;charset=utf-8;' });
@@ -243,7 +244,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   };
   
   const downloadStudentTemplate = () => {
-      // Template matched with user import logic
       const headers = "NISN,NAMA,SEKOLAH,PASSWORD";
       const example = "1234567890,Ahmad Siswa,SD NEGERI 1,12345";
       const blob = new Blob([headers + "\n" + example], { type: 'text/csv;charset=utf-8;' });
@@ -272,15 +272,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
       const processRows = (rows: any[]) => {
           const newQuestions: Question[] = rows.map((row, idx) => {
-             // Handle CSV array row only
              let text, img, oa, ob, oc, od, key, points;
-             
              if (Array.isArray(row)) {
                  if (row.length < 4) return null;
                  text = row[3]; img = row[4]; oa = row[5]; ob = row[6]; oc = row[7]; od = row[8]; key = row[9]; points = row[10];
-             } else {
-                 return null;
-             }
+             } else return null;
 
              if (!text) return null;
 
@@ -308,11 +304,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       };
 
       try {
-          const text = await file.text();
-          const rows = parseCSV(text).slice(1);
+          const fileText = await file.text();
+          const rows = parseCSV(fileText).slice(1);
           processRows(rows);
       } catch (e: any) { console.error(e); alert("Format Salah atau file corrupt."); }
-      
       e.target.value = '';
   };
 
@@ -322,12 +317,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       if (!e.target.files?.[0]) return;
       setIsProcessingImport(true);
       try {
-          const text = await e.target.files[0].text();
-          const rows = parseCSV(text).slice(1); // Skip header row
+          const fileText = await e.target.files[0].text();
+          const rows = parseCSV(fileText).slice(1); 
           
           const newUsers = rows.map((row, idx) => {
-              // Row format: NISN, NAMA, SEKOLAH, PASSWORD
-              if (!row[0] || !row[0].trim()) return null; // Skip empty rows
+              if (!row[0] || !row[0].trim()) return null;
               
               const nisn = row[0].trim();
               const name = row[1] ? row[1].trim() : 'Siswa';
@@ -352,10 +346,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           } else {
               alert("File kosong atau format salah.");
           }
-      } catch (e: any) { 
-          console.error(e);
-          alert("Gagal import siswa. Pastikan menggunakan Template CSV yang benar."); 
-      }
+      } catch (e: any) { alert("Gagal import siswa. Pastikan menggunakan Template CSV yang benar."); }
       setIsProcessingImport(false);
       e.target.value = '';
   };
@@ -363,7 +354,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const handleExportResultsExcel = () => {
       const filteredResults = results.filter(r => {
           if (resultSchoolFilter === 'ALL') return true;
-          // Find user school from users array based on result studentId/Name (approx)
           const student = users.find(u => u.id === r.studentId);
           return student?.school === resultSchoolFilter;
       });
@@ -391,6 +381,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       if (schoolFilter !== 'ALL') filtered = filtered.filter(u => u.school === schoolFilter);
       if (monitoringSearch) filtered = filtered.filter(u => u.name.toLowerCase().includes(monitoringSearch.toLowerCase()) || u.nisn?.includes(monitoringSearch));
       return filtered;
+  };
+
+  // --- HELPER FOR STUDENT STATUS COLORS ---
+  const getStudentStatusInfo = (u: User) => {
+      if (u.status === 'finished') return { color: 'bg-green-100 text-green-700 border-green-200', label: 'Selesai' };
+      if (u.isLogin) return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Mengerjakan' };
+      return { color: 'bg-red-100 text-red-700 border-red-200', label: 'Belum Login' };
   };
   
   // -- BULK ACTION LOGIC --
@@ -427,9 +424,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const schools = (Array.from(new Set(users.map(u => u.school || 'Unknown'))).filter(Boolean) as string[]).sort();
   const totalSchools = schools.length;
 
+  // Responsive Nav Item (Icons on Mobile, Full on Desktop)
   const NavItem = ({ id, label, icon: Icon }: { id: typeof activeTab, label: string, icon: any }) => (
-      <button onClick={() => setActiveTab(id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition mb-1 text-sm font-medium ${activeTab === id ? 'bg-white/10 text-white shadow-inner ring-1 ring-white/20' : 'text-blue-100 hover:bg-white/5'}`}>
-          <Icon size={18} /><span>{label}</span>
+      <button 
+        onClick={() => { setActiveTab(id); setDashboardView('MAIN'); }} 
+        className={`w-full flex items-center justify-center md:justify-start md:space-x-3 p-3 md:px-4 md:py-3 rounded-lg transition mb-1 text-sm font-medium ${activeTab === id ? 'bg-white/10 text-white shadow-inner ring-1 ring-white/20' : 'text-blue-100 hover:bg-white/5'}`}
+        title={label}
+      >
+          <Icon size={20} className="flex-shrink-0" />
+          <span className="hidden md:block truncate">{label}</span>
       </button>
   );
   
@@ -438,50 +441,354 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
 
   // --- Calculate Available Schools for Mapping (Filtering Logic) ---
   const getSchoolsAvailability = () => {
-      // Find schools that are busy in OTHER exams at the SAME time
       const busySchools = new Set<string>();
       
       exams.forEach(ex => {
-          // Skip the current exam we are editing
           if (editingExam && ex.id === editingExam.id) return;
-
-          // Check for collision (Same Date AND Same Session)
           if (ex.examDate === editDate && ex.session === editSession && ex.schoolAccess) {
               ex.schoolAccess.forEach(s => busySchools.add(s));
           }
       });
 
-      // Split logic:
-      // 1. Assigned (editSchoolAccess)
-      // 2. Available (schools - assigned - busy)
-      // 3. Busy (busySchools)
-      
       const assigned = editSchoolAccess.sort();
-      
       const available = schools.filter(s => 
           !assigned.includes(s) && 
           !busySchools.has(s) && 
           s.toLowerCase().includes(mappingSearch.toLowerCase())
       );
-
       const busyCount = busySchools.size;
-      
       return { assigned, available, busyCount };
   };
 
   const { assigned: assignedSchools, available: availableSchools, busyCount } = isEditModalOpen ? getSchoolsAvailability() : { assigned: [], available: [], busyCount: 0 };
+
+  // --- AGGREGATION FOR "JUMLAH SEKOLAH" DASHBOARD VIEW ---
+  const getSchoolStats = (schoolName: string) => {
+      const studentsInSchool = users.filter(u => u.school === schoolName);
+      const notLogin = studentsInSchool.filter(u => !u.isLogin && u.status !== 'finished').length;
+      const working = studentsInSchool.filter(u => u.isLogin && u.status !== 'finished').length;
+      const finished = studentsInSchool.filter(u => u.status === 'finished').length;
+      
+      // Get exam mapping for today
+      const today = new Date().toISOString().split('T')[0];
+      const todayExam = exams.find(e => e.examDate === today && e.schoolAccess?.includes(schoolName));
+      
+      return { notLogin, working, finished, total: studentsInSchool.length, todayExamTitle: todayExam?.title || '-' };
+  };
+
+  const handleDownloadSchoolStats = () => {
+      const headers = ["Nama Sekolah", "Total Siswa", "Belum Login", "Mengerjakan", "Selesai", "Mapel Hari Ini"];
+      const rows = schools.map(s => {
+          const stats = getSchoolStats(s);
+          return [escapeCSV(s), stats.total, stats.notLogin, stats.working, stats.finished, escapeCSV(stats.todayExamTitle)].join(",");
+      });
+      const blob = new Blob([headers.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.setAttribute('download', `REKAP_SEKOLAH_HARI_INI.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // --- RENDER CONTENT BASED ON DASHBOARD VIEW ---
+  const renderDashboardContent = () => {
+    if (dashboardView === 'STUDENTS_DETAIL') {
+        const filteredSchools = dashboardSchoolFilter === 'ALL' ? schools : [dashboardSchoolFilter];
+        
+        return (
+            <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setDashboardView('MAIN')} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft size={20}/></button>
+                        <h3 className="font-bold text-lg text-gray-800">Detail Status Siswa (Realtime)</h3>
+                    </div>
+                    <select className="border rounded p-2 text-sm min-w-[200px]" value={dashboardSchoolFilter} onChange={e => setDashboardSchoolFilter(e.target.value)}>
+                        <option value="ALL">Semua Sekolah</option>
+                        {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredSchools.map(school => {
+                        const students = users.filter(u => u.school === school);
+                        return (
+                            <div key={school} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                                <div className="p-3 bg-gray-50 border-b font-bold text-gray-700 text-sm truncate" title={school}>{school}</div>
+                                <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1">
+                                    {students.map(u => {
+                                        const status = getStudentStatusInfo(u);
+                                        return (
+                                            <div key={u.id} className={`flex items-center justify-between p-2 rounded border text-xs ${status.color}`}>
+                                                <span className="font-bold truncate w-2/3">{u.name}</span>
+                                                <span className="font-bold whitespace-nowrap">{status.label}</span>
+                                            </div>
+                                        )
+                                    })}
+                                    {students.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Tidak ada siswa.</p>}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        );
+    }
+
+    if (dashboardView === 'SCHOOLS_DETAIL') {
+        const filteredSchoolsList = dashboardSchoolFilter === 'ALL' ? schools : [dashboardSchoolFilter];
+
+        return (
+            <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setDashboardView('MAIN')} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft size={20}/></button>
+                        <h3 className="font-bold text-lg text-gray-800">Rekap Mapping & Status Sekolah</h3>
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                         <select className="border rounded p-2 text-sm flex-1 md:min-w-[200px]" value={dashboardSchoolFilter} onChange={e => setDashboardSchoolFilter(e.target.value)}>
+                            <option value="ALL">Semua Sekolah</option>
+                            {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <button onClick={handleDownloadSchoolStats} className="bg-green-600 text-white px-3 py-2 rounded text-sm font-bold flex items-center hover:bg-green-700"><Download size={16} className="md:mr-2"/><span className="hidden md:inline">CSV</span></button>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto bg-white rounded-xl shadow-sm border">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 font-bold border-b text-gray-600 uppercase text-xs">
+                            <tr>
+                                <th className="p-4">Nama Sekolah</th>
+                                <th className="p-4 text-center">Total Siswa</th>
+                                <th className="p-4 text-center text-red-600">Belum Login</th>
+                                <th className="p-4 text-center text-blue-600">Mengerjakan</th>
+                                <th className="p-4 text-center text-green-600">Selesai</th>
+                                <th className="p-4">Jadwal Mapel Hari Ini</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {filteredSchoolsList.map(school => {
+                                const stats = getSchoolStats(school);
+                                return (
+                                    <tr key={school} className="hover:bg-gray-50">
+                                        <td className="p-4 font-bold text-gray-700">{school}</td>
+                                        <td className="p-4 text-center font-mono">{stats.total}</td>
+                                        <td className="p-4 text-center font-mono text-red-600 font-bold bg-red-50">{stats.notLogin}</td>
+                                        <td className="p-4 text-center font-mono text-blue-600 font-bold bg-blue-50">{stats.working}</td>
+                                        <td className="p-4 text-center font-mono text-green-600 font-bold bg-green-50">{stats.finished}</td>
+                                        <td className="p-4 text-xs font-bold text-gray-500">{stats.todayExamTitle}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    }
+
+    if (dashboardView === 'EXAMS_DETAIL') {
+        const relevantUsers = users.filter(u => {
+             const hasAccess = exams.some(e => e.schoolAccess?.includes(u.school || ''));
+             return hasAccess && (dashboardSchoolFilter === 'ALL' || u.school === dashboardSchoolFilter);
+        });
+
+        const finishedUsers = relevantUsers.filter(u => u.status === 'finished');
+        const unfinishedUsers = relevantUsers.filter(u => u.status !== 'finished');
+
+        return (
+            <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                         <button onClick={() => setDashboardView('MAIN')} className="p-2 hover:bg-gray-100 rounded-full transition"><ArrowLeft size={20}/></button>
+                         <h3 className="font-bold text-lg text-gray-800">Detail Status Penyelesaian</h3>
+                    </div>
+                    <select className="border rounded p-2 text-sm min-w-[200px]" value={dashboardSchoolFilter} onChange={e => setDashboardSchoolFilter(e.target.value)}>
+                        <option value="ALL">Semua Sekolah Termapping</option>
+                        {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                        <div className="p-4 bg-green-50 border-b border-green-100 flex justify-between items-center">
+                            <h4 className="font-bold text-green-800 flex items-center"><CheckCircle size={18} className="mr-2"/> Sudah Selesai ({finishedUsers.length})</h4>
+                        </div>
+                        <div className="p-0 overflow-y-auto max-h-[500px]">
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-gray-50 font-bold border-b text-gray-500">
+                                    <tr><th className="p-3">Nama</th><th className="p-3">Sekolah</th></tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {finishedUsers.map(u => (
+                                        <tr key={u.id}>
+                                            <td className="p-3 font-medium">{u.name}</td>
+                                            <td className="p-3 text-gray-500">{u.school}</td>
+                                        </tr>
+                                    ))}
+                                    {finishedUsers.length === 0 && <tr><td colSpan={2} className="p-4 text-center text-gray-400">Tidak ada data.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                        <div className="p-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
+                             <h4 className="font-bold text-red-800 flex items-center"><XCircle size={18} className="mr-2"/> Belum Selesai ({unfinishedUsers.length})</h4>
+                        </div>
+                        <div className="p-0 overflow-y-auto max-h-[500px]">
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-gray-50 font-bold border-b text-gray-500">
+                                    <tr><th className="p-3">Nama</th><th className="p-3">Sekolah</th><th className="p-3">Status</th></tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {unfinishedUsers.map(u => {
+                                        const st = getStudentStatusInfo(u);
+                                        return (
+                                            <tr key={u.id}>
+                                                <td className="p-3 font-medium">{u.name}</td>
+                                                <td className="p-3 text-gray-500">{u.school}</td>
+                                                <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${st.color}`}>{st.label}</span></td>
+                                            </tr>
+                                        )
+                                    })}
+                                    {unfinishedUsers.length === 0 && <tr><td colSpan={3} className="p-4 text-center text-gray-400">Tidak ada data.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Graph Data Preparation
+    const graphData = [
+        { label: 'Siswa Terdaftar', value: users.length, color: 'bg-green-500', icon: Users, textColor: 'text-green-600', borderColor: 'border-green-200' },
+        { label: 'Jumlah Sekolah', value: schools.length, color: 'bg-purple-500', icon: School, textColor: 'text-purple-600', borderColor: 'border-purple-200' },
+        { label: 'Ujian Selesai', value: results.length, color: 'bg-orange-500', icon: GraduationCap, textColor: 'text-orange-600', borderColor: 'border-orange-200' },
+    ];
+    const maxGraphValue = Math.max(...graphData.map(d => d.value), 10); 
+
+    // Default MAIN Dashboard View
+    return (
+        <div className="animate-in fade-in">
+            {/* Top Cards Grid - 1 Col on Mobile, 4 Col on Large */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {/* Total Mapel */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-blue-500 group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Mapel</p>
+                            <h3 className="text-4xl font-bold text-gray-800 mt-2">{exams.length}</h3>
+                        </div>
+                        <div className="bg-blue-50 p-3 rounded-lg group-hover:scale-110 transition"><BookOpen className="text-blue-500" size={24}/></div>
+                    </div>
+                </div>
+
+                {/* Siswa Terdaftar */}
+                <div 
+                    onClick={() => setDashboardView('STUDENTS_DETAIL')}
+                    className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-lg hover:-translate-y-1 transition border-l-4 border-l-green-500 cursor-pointer group"
+                >
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Siswa Terdaftar</p>
+                            <h3 className="text-4xl font-bold text-gray-800 mt-2">{users.length}</h3>
+                        </div>
+                        <div className="bg-green-50 p-3 rounded-lg group-hover:scale-110 transition"><Users className="text-green-500" size={24}/></div>
+                    </div>
+                    <p className="text-xs text-green-600 mt-4 font-bold flex items-center">Lihat Detail Status <ArrowLeft size={12} className="rotate-180 ml-1"/></p>
+                </div>
+
+                {/* Jumlah Sekolah */}
+                <div 
+                    onClick={() => setDashboardView('SCHOOLS_DETAIL')}
+                    className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-lg hover:-translate-y-1 transition border-l-4 border-l-purple-500 cursor-pointer group"
+                >
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Jumlah Sekolah</p>
+                            <h3 className="text-4xl font-bold text-gray-800 mt-2">{schools.length}</h3>
+                        </div>
+                        <div className="bg-purple-50 p-3 rounded-lg group-hover:scale-110 transition"><School className="text-purple-500" size={24}/></div>
+                    </div>
+                    <p className="text-xs text-purple-600 mt-4 font-bold flex items-center">Lihat Mapping & Status <ArrowLeft size={12} className="rotate-180 ml-1"/></p>
+                </div>
+
+                {/* Ujian Selesai */}
+                <div 
+                    onClick={() => setDashboardView('EXAMS_DETAIL')}
+                    className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-lg hover:-translate-y-1 transition border-l-4 border-l-orange-500 cursor-pointer group"
+                >
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Ujian Selesai</p>
+                            <h3 className="text-4xl font-bold text-gray-800 mt-2">{results.length}</h3>
+                        </div>
+                        <div className="bg-orange-50 p-3 rounded-lg group-hover:scale-110 transition"><GraduationCap className="text-orange-500" size={24}/></div>
+                    </div>
+                    <p className="text-xs text-orange-600 mt-4 font-bold flex items-center">Lihat Rekap Pengerjaan <ArrowLeft size={12} className="rotate-180 ml-1"/></p>
+                </div>
+            </div>
+
+            {/* REALTIME VISUAL GRAPH SECTION */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-lg text-gray-800 flex items-center">
+                        <Activity className="mr-2 text-blue-600" size={20}/> Grafik Statistik Data Realtime
+                    </h3>
+                    <div className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">Updated: Just now</div>
+                </div>
+                
+                <div className="relative h-64 bg-gradient-to-b from-gray-50/50 to-white rounded-xl border border-dashed border-gray-200 p-6 flex items-end justify-around gap-4 md:gap-12 overflow-hidden">
+                    <div className="absolute inset-0 w-full h-full pointer-events-none opacity-30 flex flex-col justify-between px-6 py-6 pb-12">
+                        <div className="w-full border-t border-gray-300 border-dashed"></div>
+                        <div className="w-full border-t border-gray-300 border-dashed"></div>
+                        <div className="w-full border-t border-gray-300 border-dashed"></div>
+                        <div className="w-full border-t border-gray-300 border-dashed"></div>
+                    </div>
+
+                    {graphData.map((data, index) => {
+                        const heightPercent = (data.value / maxGraphValue) * 100;
+                        const finalHeight = Math.max(heightPercent, 5);
+
+                        return (
+                            <div key={index} className="flex flex-col items-center justify-end w-full max-w-[120px] h-full group z-10">
+                                <div className={`mb-2 font-bold text-lg md:text-2xl transition-all duration-500 transform translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 ${data.textColor}`}>
+                                    {data.value}
+                                </div>
+                                <div 
+                                    className={`w-full md:w-16 rounded-t-lg shadow-md transition-all duration-1000 ease-out hover:opacity-90 relative ${data.color}`}
+                                    style={{ height: `${finalHeight}%` }}
+                                >
+                                    <div className="absolute inset-0 bg-white/20 skew-x-12 -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                                </div>
+                                <div className="mt-3 text-center">
+                                    <div className={`p-2 rounded-full border mb-1 mx-auto w-fit bg-white ${data.borderColor}`}>
+                                        <data.icon size={16} className={data.textColor}/>
+                                    </div>
+                                    <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide hidden md:block">{data.label}</span>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+  };
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden print:h-auto print:overflow-visible">
       <input type="file" ref={studentFileRef} className="hidden" accept=".csv" onChange={onStudentFileChange} />
       <input type="file" ref={questionFileRef} className="hidden" accept=".csv" onChange={onQuestionFileChange} />
 
-      <aside className="w-64 flex-shrink-0 text-white flex flex-col shadow-xl z-20 transition-all duration-300 print:hidden" style={{ backgroundColor: themeColor }}>
-          <div className="p-6 border-b border-white/10 flex items-center space-x-3">
-              <BookOpen size={28} className="text-white drop-shadow-md" />
-              <div><h1 className="font-bold text-lg tracking-wide">ADMIN SD</h1><p className="text-xs text-blue-100 opacity-80">Panel Sekolah Dasar</p></div>
+      {/* RESPONSIVE SIDEBAR: w-16 on Mobile (Icon only), w-64 on Desktop */}
+      <aside className="w-16 md:w-64 flex-shrink-0 text-white flex flex-col shadow-xl z-20 transition-all duration-300 print:hidden" style={{ backgroundColor: themeColor }}>
+          <div className="p-4 md:p-6 border-b border-white/10 flex items-center justify-center md:justify-start md:space-x-3">
+              <BookOpen size={28} className="text-white drop-shadow-md flex-shrink-0" />
+              <div className="hidden md:block overflow-hidden whitespace-nowrap">
+                  <h1 className="font-bold text-lg tracking-wide">ADMIN SD</h1>
+                  <p className="text-xs text-blue-100 opacity-80">Panel Sekolah Dasar</p>
+              </div>
           </div>
-          <nav className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+          <nav className="flex-1 p-2 md:p-4 overflow-y-auto custom-scrollbar">
               <NavItem id="DASHBOARD" label="Dashboard" icon={LayoutDashboard} />
               <NavItem id="MONITORING" label="Monitoring Ujian" icon={Activity} />
               <NavItem id="HASIL_UJIAN" label="Hasil Ujian" icon={ClipboardList} />
@@ -493,34 +800,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
               <div className="my-2 border-t border-white/10"></div>
               <NavItem id="ANTI_CHEAT" label="Sistem Anti-Curang" icon={ShieldAlert} />
           </nav>
-          <div className="p-4 border-t border-white/10 bg-black/10">
-               <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 bg-red-500/20 hover:bg-red-500/40 text-red-100 py-2 rounded text-xs font-bold transition border border-red-500/30">
-                   <LogOut size={14} /> <span>Keluar</span>
+          <div className="p-2 md:p-4 border-t border-white/10 bg-black/10">
+               <button onClick={onLogout} className="w-full flex items-center justify-center md:space-x-2 bg-red-500/20 hover:bg-red-500/40 text-red-100 p-2 md:py-2 rounded text-xs font-bold transition border border-red-500/30" title="Keluar">
+                   <LogOut size={16} /> <span className="hidden md:inline">Keluar</span>
                </button>
           </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8 bg-gray-50/50 print:overflow-visible print:h-auto print:absolute print:top-0 print:left-0 print:w-full print:m-0 print:p-0 print:bg-white">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/50 print:overflow-visible print:h-auto print:absolute print:top-0 print:left-0 print:w-full print:m-0 print:p-0 print:bg-white">
           {/* HEADER */}
-          <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-100 print:hidden">
+          <header className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-100 print:hidden gap-4">
                <h2 className="text-2xl font-bold text-gray-800 flex items-center">{activeTab.replace('_', ' ')}</h2>
                {isLoadingData && <span className="text-xs text-blue-500 animate-pulse flex items-center"><Loader2 size={12} className="animate-spin mr-1"/> Memuat Data...</span>}
           </header>
 
-          {/* DASHBOARD */}
-          {activeTab === 'DASHBOARD' && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in print:hidden">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-blue-500"><p className="text-gray-500 text-xs font-bold uppercase">Total Mapel</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{exams.length}</h3></div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-green-500"><p className="text-gray-500 text-xs font-bold uppercase">Siswa Terdaftar</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{users.length}</h3></div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-purple-500"><p className="text-gray-500 text-xs font-bold uppercase">Jumlah Sekolah</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{totalSchools}</h3></div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border hover:shadow-md transition border-l-4 border-l-orange-500"><p className="text-gray-500 text-xs font-bold uppercase">Ujian Selesai</p><h3 className="text-4xl font-bold text-gray-800 mt-2">{results.length}</h3></div>
-              </div>
-          )}
+          {/* DASHBOARD (Main & Sub-views handled by renderDashboardContent) */}
+          {activeTab === 'DASHBOARD' && renderDashboardContent()}
 
-          {/* MONITORING */}
+          {/* MONITORING - UPDATED WITH COLOR CODING */}
           {activeTab === 'MONITORING' && (
-               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
-                   <div className="flex justify-between items-center mb-4">
+               <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 animate-in fade-in print:hidden">
+                   <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                        <h3 className="font-bold text-lg flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
                        {selectedStudentIds.length > 0 && (
                            <button onClick={handleBulkReset} className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm font-bold flex items-center shadow-md animate-in fade-in hover:bg-orange-600">
@@ -549,35 +849,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                                 </tr>
                            </thead>
                            <tbody className="divide-y">
-                               {filteredMonitoringUsers.map(u => (
-                                   <tr key={u.id} className="hover:bg-gray-50">
-                                       <td className="p-3 text-center">
-                                           <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded cursor-pointer"
-                                                checked={selectedStudentIds.includes(u.id)}
-                                                onChange={() => toggleSelectOne(u.id)}
-                                           />
-                                       </td>
-                                       <td className="p-3">{u.name}</td>
-                                       <td className="p-3 font-mono">{u.nisn}</td>
-                                       <td className="p-3">{u.school}</td>
-                                       <td className="p-3">
-                                           <span className={`px-2 py-1 rounded text-xs font-bold ${u.status === 'working' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                               {u.status === 'working' ? 'Mengerjakan' : 'Login'}
-                                           </span>
-                                       </td>
-                                       <td className="p-3 text-center">
-                                           <button 
-                                                title="Buka Freeze (Reset Status)" 
-                                                onClick={async () => { await db.resetUserStatus(u.id); alert('Status siswa di-reset (Unfreeze).'); loadData(); }} 
-                                                className="text-orange-600 bg-orange-50 border border-orange-200 p-1.5 rounded hover:bg-orange-100 transition"
-                                            >
-                                                <Flame size={16} />
-                                           </button>
-                                       </td>
-                                   </tr>
-                               ))}
+                               {filteredMonitoringUsers.map(u => {
+                                   const statusInfo = getStudentStatusInfo(u);
+                                   return (
+                                       <tr key={u.id} className="hover:bg-gray-50">
+                                           <td className="p-3 text-center">
+                                               <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 rounded cursor-pointer"
+                                                    checked={selectedStudentIds.includes(u.id)}
+                                                    onChange={() => toggleSelectOne(u.id)}
+                                               />
+                                           </td>
+                                           <td className="p-3">{u.name}</td>
+                                           <td className="p-3 font-mono">{u.nisn}</td>
+                                           <td className="p-3">{u.school}</td>
+                                           <td className="p-3">
+                                               <span className={`px-2 py-1 rounded text-xs font-bold border ${statusInfo.color}`}>
+                                                   {statusInfo.label}
+                                               </span>
+                                           </td>
+                                           <td className="p-3 text-center">
+                                               <button 
+                                                    title="Buka Freeze (Reset Status)" 
+                                                    onClick={async () => { await db.resetUserStatus(u.id); alert('Status siswa di-reset (Unfreeze).'); loadData(); }} 
+                                                    className="text-orange-600 bg-orange-50 border border-orange-200 p-1.5 rounded hover:bg-orange-100 transition"
+                                                >
+                                                    <Flame size={16} />
+                                               </button>
+                                           </td>
+                                       </tr>
+                                   )
+                               })}
                                {filteredMonitoringUsers.length === 0 && (
                                    <tr><td colSpan={6} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>
                                )}
