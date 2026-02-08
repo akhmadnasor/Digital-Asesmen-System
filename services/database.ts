@@ -213,6 +213,9 @@ export const db = {
   },
 
   submitResult: async (result: ExamResult): Promise<void> => {
+    // Note: 'results' table in schema doesn't technically have cheating_attempts column based on SQL provided previously,
+    // but assuming we might add it or just tracking 'score'. 
+    // If you need to persist cheating, ensure column exists. For now, standard insert.
     const payload = {
         student_id: result.studentId,
         subject_id: result.examId,
@@ -234,6 +237,9 @@ export const db = {
 
     if (error || !data) return [];
     
+    // Note: Since real DB might not store cheating_attempts in 'results' table yet (based on previous schema),
+    // we default it to 0 or mock it if needed for the UI demo.
+    // In a real scenario, ADD 'cheating_attempts' column to 'results' table.
     return data.map((r: any) => ({
         id: r.id,
         studentId: r.student_id,
@@ -242,8 +248,20 @@ export const db = {
         examTitle: r.subjects?.name || 'Unknown',
         score: Number(r.score),
         submittedAt: r.timestamp,
-        totalQuestions: 0, cheatingAttempts: 0
+        totalQuestions: 0, 
+        cheatingAttempts: 0 // Defaulting as DB column might be missing
     }));
+  },
+
+  // NEW FUNCTION: Reset Cheating Count
+  resetCheatingCount: async (resultId: string): Promise<void> => {
+      // In a real implementation with a cheating_attempts column:
+      // await supabase.from('results').update({ cheating_attempts: 0 }).eq('id', resultId);
+      
+      // Since we are mocking the realtime aspect on the dashboard for the prompt:
+      // This is a placeholder for the backend logic.
+      console.log(`Resetting cheating count for result ${resultId}`);
+      return Promise.resolve();
   },
 
   getUsers: async (): Promise<User[]> => {

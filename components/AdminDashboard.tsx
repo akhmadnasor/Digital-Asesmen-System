@@ -118,6 +118,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [monitoringSearch, setMonitoringSearch] = useState<string>('');
   const [printDate, setPrintDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   
+  // GRAPH FILTERS
+  const [graphFilterMode, setGraphFilterMode] = useState<'SCHEDULED' | 'ALL'>('SCHEDULED');
+  const [graphDate, setGraphDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedSchoolTooltip, setSelectedSchoolTooltip] = useState<{name: string, value: number, x: number, y: number} | null>(null);
+
   // MONITORING BULK ACTIONS
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
@@ -151,6 +156,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       });
       onSettingsChange();
       alert("Pengaturan Sistem Anti-Curang berhasil diperbarui!");
+  };
+
+  const handleResetViolation = async (resultId: string) => {
+      if(!confirm("Reset status pelanggaran siswa ini?")) return;
+      
+      await db.resetCheatingCount(resultId);
+      
+      // Optimistic update locally
+      setResults(prev => prev.map(r => r.id === resultId ? {...r, cheatingAttempts: 0} : r));
+      alert("Pelanggaran di-reset.");
   };
 
   const handleCreateExam = async () => {
@@ -657,15 +672,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
         );
     }
 
-    // Graph Data Preparation
-    const graphData = [
-        { label: 'Siswa Terdaftar', value: users.length, color: 'bg-green-500', icon: Users, textColor: 'text-green-600', borderColor: 'border-green-200' },
-        { label: 'Jumlah Sekolah', value: schools.length, color: 'bg-purple-500', icon: School, textColor: 'text-purple-600', borderColor: 'border-purple-200' },
-        { label: 'Ujian Selesai', value: results.length, color: 'bg-orange-500', icon: GraduationCap, textColor: 'text-orange-600', borderColor: 'border-orange-200' },
-    ];
-    const maxGraphValue = Math.max(...graphData.map(d => d.value), 10); 
+    // --- LINE CHART DATA PREPARATION (ENHANCED LOGIC) ---
+    // 1. Determine Target Schools based on Filter (Scheduled vs All)
+    let targetSchools: string[] = [];
+    if (graphFilterMode === 'SCHEDULED') {
+        const activeExamsOnDate = exams.filter(e => e.examDate === graphDate);
+        const scheduledSet = new Set<string>();
+        activeExamsOnDate.forEach(e => {
+            if (e.schoolAccess && Array.isArray(e.schoolAccess)) {
+                e.schoolAccess.forEach(s => scheduledSet.add(s));
+            }
+        });
+        targetSchools = Array.from(scheduledSet).sort();
+    } else {
+        targetSchools = schools;
+    }
 
-    // Default MAIN Dashboard View
+    // 2. Calculate Stats for each target school
+    const chartData = targetSchools.map(school => {
+        // Students enrolled in this school
+        const schoolStudents = users.filter(u => u.school === school);
+        const total = schoolStudents.length;
+
+        // Finished: Strictly checked against Results table for the specific date
+        const finishedCount = results.filter(r => {
+            const rDate = r.submittedAt ? r.submittedAt.split('T')[0] : '';
+            const student = users.find(u => u.id === r.studentId);
+            return rDate === graphDate && student?.school === school;
+        }).length;
+
+        // Working: Snapshot of currently login students who haven't finished
+        const workingCount = schoolStudents.filter(u => u.isLogin && u.status !== 'finished').length;
+
+        // Not Login: Remaining students (Total - FinishedToday - WorkingNow)
+        // Note: Use Math.max(0, ...) to prevent negative numbers if data is slightly out of sync
+        const notLoginCount = Math.max(0, total - workingCount - finishedCount);
+
+        return {
+            name: school,
+            notLogin: notLoginCount,
+            working: workingCount,
+            finished: finishedCount
+        };
+    });
+
+    // Chart Dimensions
+    const svgHeight = 400; // Increased height
+    const svgWidth = 800; // Aspect ratio ~2.66
+    const paddingX = 50;
+    const paddingTop = 40;
+    const paddingBottom = 120; // Increased bottom padding for rotated text
+    const chartAreaWidth = svgWidth - paddingX * 2;
+    const chartAreaHeight = svgHeight - paddingTop - paddingBottom;
+
+    // Determine Y Axis Max Value (Rounded up to next 10 for cleaner grid)
+    const maxVal = Math.max(10, ...chartData.map(d => Math.max(d.notLogin, d.working, d.finished)));
+    const yMax = Math.ceil(maxVal / 10) * 10; 
+
+    // Generate Points string for Polyline
+    const getPoints = (key: 'notLogin' | 'working' | 'finished') => {
+        return chartData.map((d, i) => {
+            const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
+            const y = (svgHeight - paddingBottom) - (d[key] / yMax) * chartAreaHeight;
+            return `${x},${y}`;
+        }).join(' ');
+    };
+
+    // --- DEFAULT MAIN DASHBOARD VIEW ---
     return (
         <div className="animate-in fade-in">
             {/* Top Cards Grid - 1 Col on Mobile, 4 Col on Large */}
@@ -727,47 +800,228 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                 </div>
             </div>
 
-            {/* REALTIME VISUAL GRAPH SECTION */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-lg text-gray-800 flex items-center">
-                        <Activity className="mr-2 text-blue-600" size={20}/> Grafik Statistik Data Realtime
-                    </h3>
-                    <div className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">Updated: Just now</div>
+            {/* REALTIME 2D LINE CHART SECTION */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-in slide-in-from-bottom-4 duration-500 mb-8">
+                {/* FILTER HEADER */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div className="flex items-center">
+                        <Activity className="mr-2 text-blue-600" size={24}/>
+                        <div>
+                            <h3 className="font-bold text-lg text-gray-800">Grafik Statistik Realtime</h3>
+                            <p className="text-xs text-gray-500">Pantau progres ujian berdasarkan sekolah dan jadwal.</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-2 rounded-lg border">
+                        {/* Toggle Filter Mode */}
+                        <div className="flex bg-white rounded-md shadow-sm border overflow-hidden">
+                            <button 
+                                onClick={() => setGraphFilterMode('SCHEDULED')}
+                                className={`px-3 py-1.5 text-xs font-bold transition ${graphFilterMode === 'SCHEDULED' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                Terjadwal
+                            </button>
+                            <button 
+                                onClick={() => setGraphFilterMode('ALL')}
+                                className={`px-3 py-1.5 text-xs font-bold transition ${graphFilterMode === 'ALL' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                Semua
+                            </button>
+                        </div>
+
+                        {/* Date Filter */}
+                        <div className="flex items-center bg-white border rounded-md px-2 py-1 shadow-sm">
+                            <Calendar size={14} className="text-gray-400 mr-2"/>
+                            <input 
+                                type="date" 
+                                className="text-xs font-bold text-gray-700 outline-none"
+                                value={graphDate}
+                                onChange={(e) => setGraphDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
                 </div>
                 
-                <div className="relative h-64 bg-gradient-to-b from-gray-50/50 to-white rounded-xl border border-dashed border-gray-200 p-6 flex items-end justify-around gap-4 md:gap-12 overflow-hidden">
-                    <div className="absolute inset-0 w-full h-full pointer-events-none opacity-30 flex flex-col justify-between px-6 py-6 pb-12">
-                        <div className="w-full border-t border-gray-300 border-dashed"></div>
-                        <div className="w-full border-t border-gray-300 border-dashed"></div>
-                        <div className="w-full border-t border-gray-300 border-dashed"></div>
-                        <div className="w-full border-t border-gray-300 border-dashed"></div>
-                    </div>
+                <div className="w-full h-auto overflow-x-auto relative">
+                    {chartData.length === 0 ? (
+                        <div className="h-[300px] flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                            <CalendarDays size={48} className="mb-2 opacity-50"/>
+                            <p className="font-bold text-sm">Tidak ada jadwal ujian pada tanggal ini.</p>
+                            <p className="text-xs">Ubah filter tanggal atau pilih mode "Semua".</p>
+                        </div>
+                    ) : (
+                        <div className="min-w-[600px] h-[400px]">
+                            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full" preserveAspectRatio="none">
+                                {/* Gridlines & Y-Axis Labels */}
+                                {Array.from({ length: 6 }).map((_, i) => {
+                                    const y = (svgHeight - paddingBottom) - (i * (chartAreaHeight / 5));
+                                    const val = Math.round(i * (yMax / 5));
+                                    return (
+                                        <g key={i}>
+                                            <line x1={paddingX} y1={y} x2={svgWidth - paddingX} y2={y} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 2" />
+                                            <text x={paddingX - 10} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280">{val}</text>
+                                        </g>
+                                    );
+                                })}
 
-                    {graphData.map((data, index) => {
-                        const heightPercent = (data.value / maxGraphValue) * 100;
-                        const finalHeight = Math.max(heightPercent, 5);
+                                {/* X-Axis Labels - Rotated for Visibility */}
+                                {chartData.map((d, i) => {
+                                    const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
+                                    return (
+                                        <text 
+                                            key={i} 
+                                            x={0} 
+                                            y={0} 
+                                            transform={`translate(${x}, ${svgHeight - paddingBottom + 20}) rotate(45)`} 
+                                            textAnchor="start" 
+                                            fontSize="10" 
+                                            fill="#374151" 
+                                            className="font-bold"
+                                        >
+                                            {d.name}
+                                        </text>
+                                    );
+                                })}
 
-                        return (
-                            <div key={index} className="flex flex-col items-center justify-end w-full max-w-[120px] h-full group z-10">
-                                <div className={`mb-2 font-bold text-lg md:text-2xl transition-all duration-500 transform translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 ${data.textColor}`}>
-                                    {data.value}
-                                </div>
-                                <div 
-                                    className={`w-full md:w-16 rounded-t-lg shadow-md transition-all duration-1000 ease-out hover:opacity-90 relative ${data.color}`}
-                                    style={{ height: `${finalHeight}%` }}
-                                >
-                                    <div className="absolute inset-0 bg-white/20 skew-x-12 -translate-x-full animate-[shimmer_2s_infinite]"></div>
-                                </div>
-                                <div className="mt-3 text-center">
-                                    <div className={`p-2 rounded-full border mb-1 mx-auto w-fit bg-white ${data.borderColor}`}>
-                                        <data.icon size={16} className={data.textColor}/>
-                                    </div>
-                                    <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide hidden md:block">{data.label}</span>
-                                </div>
-                            </div>
-                        )
-                    })}
+                                {/* Axes Lines */}
+                                <line x1={paddingX} y1={paddingTop} x2={paddingX} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="2" />
+                                <line x1={paddingX} y1={svgHeight - paddingBottom} x2={svgWidth - paddingX} y2={svgHeight - paddingBottom} stroke="#9ca3af" strokeWidth="2" />
+
+                                {/* Data Lines */}
+                                {/* Not Login (Red) */}
+                                <polyline points={getPoints('notLogin')} fill="none" stroke="#dc2626" strokeWidth="3" />
+                                {chartData.map((d, i) => {
+                                    const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
+                                    const y = (svgHeight - paddingBottom) - (d.notLogin / yMax) * chartAreaHeight;
+                                    return (
+                                        <g key={`nl-${i}`} className="group">
+                                            <circle cx={x} cy={y} r="4" fill="#dc2626" className="group-hover:r-6 transition-all"/>
+                                            <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fill="#dc2626" className="opacity-0 group-hover:opacity-100 font-bold">{d.notLogin}</text>
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Working (Blue) */}
+                                <polyline points={getPoints('working')} fill="none" stroke="#2563eb" strokeWidth="3" />
+                                {chartData.map((d, i) => {
+                                    const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
+                                    const y = (svgHeight - paddingBottom) - (d.working / yMax) * chartAreaHeight;
+                                    return (
+                                        <g key={`wk-${i}`} className="group">
+                                            <circle cx={x} cy={y} r="4" fill="#2563eb" className="group-hover:r-6 transition-all"/>
+                                            <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fill="#2563eb" className="opacity-0 group-hover:opacity-100 font-bold">{d.working}</text>
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Finished (Green) with Click Interaction */}
+                                <polyline points={getPoints('finished')} fill="none" stroke="#16a34a" strokeWidth="3" />
+                                {chartData.map((d, i) => {
+                                    const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
+                                    const y = (svgHeight - paddingBottom) - (d.finished / yMax) * chartAreaHeight;
+                                    return (
+                                        <g key={`fn-${i}`} className="group" onClick={() => setSelectedSchoolTooltip({name: d.name, value: d.finished, x, y})}>
+                                            <circle cx={x} cy={y} r="6" fill="#16a34a" className="group-hover:r-8 transition-all cursor-pointer stroke-white stroke-2 shadow-lg"/>
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Legend */}
+                                <g transform={`translate(${svgWidth - 120}, ${paddingTop})`}>
+                                    <rect width="110" height="70" fill="white" stroke="#e5e7eb" rx="4" />
+                                    
+                                    <circle cx="15" cy="15" r="4" fill="#dc2626" />
+                                    <text x="25" y="19" fontSize="10" fill="#374151">Belum Login</text>
+
+                                    <circle cx="15" cy="35" r="4" fill="#2563eb" />
+                                    <text x="25" y="39" fontSize="10" fill="#374151">Mengerjakan</text>
+
+                                    <circle cx="15" cy="55" r="4" fill="#16a34a" />
+                                    <text x="25" y="59" fontSize="10" fill="#374151">Selesai</text>
+                                </g>
+
+                                {/* Tooltip Overlay */}
+                                {selectedSchoolTooltip && (
+                                    <g transform={`translate(${selectedSchoolTooltip.x}, ${selectedSchoolTooltip.y - 50})`}>
+                                        <defs>
+                                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.3"/>
+                                            </filter>
+                                        </defs>
+                                        <rect x="-100" y="-30" width="200" height="50" rx="8" fill="white" stroke="#16a34a" strokeWidth="2" filter="url(#shadow)" />
+                                        <text x="0" y="-12" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#374151">
+                                            {selectedSchoolTooltip.name}
+                                        </text>
+                                        <text x="0" y="5" textAnchor="middle" fontSize="10" fill="#16a34a" fontWeight="bold">
+                                            Total Selesai: {selectedSchoolTooltip.value} Siswa
+                                        </text>
+                                        <polygon points="-6,20 6,20 0,26" fill="#16a34a" transform="translate(0, 0)" />
+                                        
+                                        {/* Close Trigger */}
+                                        <circle cx="90" cy="-20" r="8" fill="#f3f4f6" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedSchoolTooltip(null); }} />
+                                        <text x="90" y="-17" textAnchor="middle" fontSize="10" fill="#9ca3af" pointerEvents="none">x</text>
+                                    </g>
+                                )}
+                            </svg>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* VIOLATION HISTORY WIDGET (Riwayat Pelanggaran) */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-in slide-in-from-bottom-4 duration-500 delay-100">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="font-bold text-lg text-gray-800 flex items-center">
+                        <ShieldAlert className="mr-2 text-red-600" size={20}/> Riwayat Pelanggaran Siswa (Realtime)
+                    </h3>
+                </div>
+                
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-red-50 text-red-900 font-bold border-b border-red-100">
+                            <tr>
+                                <th className="p-3 rounded-tl-lg">Nama Siswa</th>
+                                <th className="p-3">Sekolah</th>
+                                <th className="p-3">Mapel</th>
+                                <th className="p-3 text-center">Jml Pelanggaran</th>
+                                <th className="p-3 rounded-tr-lg text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {results.filter(r => r.cheatingAttempts > 0).length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                                        Tidak ada pelanggaran terdeteksi saat ini.
+                                    </td>
+                                </tr>
+                            ) : (
+                                results
+                                .filter(r => r.cheatingAttempts > 0)
+                                .sort((a, b) => b.cheatingAttempts - a.cheatingAttempts)
+                                .map(r => (
+                                    <tr key={r.id} className="hover:bg-red-50/30 transition">
+                                        <td className="p-3 font-bold text-gray-800">{r.studentName}</td>
+                                        <td className="p-3 text-gray-600">{users.find(u => u.id === r.studentId)?.school || '-'}</td>
+                                        <td className="p-3 text-gray-600">{r.examTitle}</td>
+                                        <td className="p-3 text-center">
+                                            <span className="inline-flex items-center justify-center px-3 py-1 bg-red-100 text-red-700 rounded-full font-bold text-xs border border-red-200 shadow-sm animate-pulse">
+                                                {r.cheatingAttempts}x
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-center">
+                                            <button 
+                                                onClick={() => handleResetViolation(r.id)}
+                                                className="bg-white border border-gray-300 text-gray-600 hover:text-blue-600 hover:border-blue-400 px-3 py-1 rounded text-xs font-bold flex items-center justify-center mx-auto transition shadow-sm"
+                                                title="Reset Status Pelanggaran"
+                                            >
+                                                <RotateCcw size={12} className="mr-1"/> Reset
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
