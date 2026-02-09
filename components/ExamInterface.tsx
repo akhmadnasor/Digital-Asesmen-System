@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Exam, ExamResult, User, Question, AppSettings } from '../types';
 import { playAlertSound } from '../utils/sound';
-import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle, ShieldAlert, ZoomIn, X, Maximize2 } from 'lucide-react';
+import { Timer, ChevronRight, ChevronLeft, Grid3X3, Trophy, CheckCircle, ShieldAlert, ZoomIn, X, Maximize2, Clock } from 'lucide-react';
 import { db } from '../services/database'; // SWITCHED TO REAL DB
 import { Confetti } from './Confetti';
 
@@ -104,6 +104,9 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
   
   // UI State
   const [showQuestionListModal, setShowQuestionListModal] = useState(false);
+  
+  // Time Warning State
+  const [timeAlert, setTimeAlert] = useState<{ visible: boolean; title: string; subtitle: string } | null>(null);
 
   // Anti Cheat States
   const [isFrozen, setIsFrozen] = useState(false);
@@ -123,15 +126,40 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
     setMaxPossibleScore(max);
 
     const timer = setInterval(() => {
-      // Don't decrease exam timer if frozen? Or assume time keeps running as penalty?
-      // Usually time keeps running as penalty.
       setTimeLeft((prev) => {
-        if (prev <= 1) {
+        const nextTime = prev - 1;
+
+        // --- WARNING LOGIC START ---
+        // Warning 5 Minutes (300 seconds)
+        if (nextTime === 300) {
+            setTimeAlert({ 
+                visible: true, 
+                title: "Waktu mengerjakan kurang 5 menit", 
+                subtitle: "Periksa kembali soal dan jawaban" 
+            });
+            // Auto hide after 3 seconds
+            setTimeout(() => setTimeAlert(null), 3000);
+        }
+
+        // Warning 1 Minute (60 seconds)
+        if (nextTime === 60) {
+            setTimeAlert({ 
+                visible: true, 
+                title: "Waktu mengerjakan kurang 60 detik", 
+                subtitle: "Periksa kembali soal dan jawaban" 
+            });
+            // Auto hide after 3 seconds
+            setTimeout(() => setTimeAlert(null), 3000);
+        }
+        // --- WARNING LOGIC END ---
+
+        if (nextTime <= 0) {
           clearInterval(timer);
-          finishExam(); 
+          // Use setTimeout to break the render cycle just in case
+          setTimeout(() => finishExam(), 0);
           return 0;
         }
-        return prev - 1;
+        return nextTime;
       });
     }, 1000);
     return () => clearInterval(timer);
@@ -455,6 +483,17 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ user, exam, onComp
                   <div className="text-6xl font-mono font-bold text-white">{freezeTimeLeft}</div>
               </div>
               <p className="text-gray-400 mt-8 max-w-md">Layar Anda dibekukan karena terdeteksi meninggalkan halaman ujian. Waktu pembekuan akan <strong>BERLIPAT GANDA</strong> jika Anda mengulanginya lagi.</p>
+          </div>
+      )}
+
+      {/* TIME ALERT POPUP (WARNING 5 MIN / 1 MIN) */}
+      {timeAlert && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center pointer-events-none px-4">
+              <div className="bg-orange-500 text-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center animate-in zoom-in duration-300 border-4 border-white ring-4 ring-orange-200/50 max-w-sm w-full text-center">
+                  <Clock size={48} className="mb-3 animate-pulse text-white drop-shadow-md" />
+                  <h2 className="text-2xl font-bold mb-1 leading-tight">{timeAlert.title}</h2>
+                  <p className="font-medium text-orange-100 text-sm uppercase tracking-wider">{timeAlert.subtitle}</p>
+              </div>
           </div>
       )}
 
