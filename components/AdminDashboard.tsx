@@ -114,6 +114,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [selectedSchoolFilter, setSelectedSchoolFilter] = useState<string>('ALL'); // For Peserta & Monitoring
   const [dashboardSchoolFilter, setDashboardSchoolFilter] = useState<string>('ALL'); // For Dashboard Details
   const [resultSchoolFilter, setResultSchoolFilter] = useState<string>('ALL'); // For Results
+  const [resultSubjectFilter, setResultSubjectFilter] = useState<string>('ALL'); // For Results - Subject
   const [cardSchoolFilter, setCardSchoolFilter] = useState<string>('ALL'); // For Cards
   const [monitoringSearch, setMonitoringSearch] = useState<string>('');
   const [printDate, setPrintDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
@@ -367,28 +368,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   };
 
   const handleExportResultsExcel = () => {
-      const filteredResults = results.filter(r => {
-          if (resultSchoolFilter === 'ALL') return true;
-          const student = users.find(u => u.id === r.studentId);
-          return student?.school === resultSchoolFilter;
+      const filteredRawResults = results.filter(r => {
+          // Check School
+          if (resultSchoolFilter !== 'ALL') {
+              const student = users.find(u => u.id === r.studentId);
+              if (student?.school !== resultSchoolFilter) return false;
+          }
+          // Check Subject (Mapel)
+          if (resultSubjectFilter !== 'ALL' && r.examTitle !== resultSubjectFilter) return false;
+          
+          return true;
       });
 
-      if (filteredResults.length === 0) return alert("Tidak ada data untuk diexport");
+      if (filteredRawResults.length === 0) return alert("Tidak ada data untuk diexport");
 
-      const headers = ["Nama Siswa", "Sekolah", "Mata Pelajaran", "Nilai", "Waktu Submit"];
-      const rows = filteredResults.map(r => {
-          const student = users.find(u => u.id === r.studentId);
+      // 1. Identify Unique Subjects (Columns)
+      const uniqueSubjects = Array.from(new Set(filteredRawResults.map(r => r.examTitle || 'Unknown'))).sort();
+
+      // 2. Group Data by Student (Pivot)
+      type PivotEntry = { name: string, school: string, scores: {[key: string]: number}, lastSubmit: string };
+      const studentsMap = new Map<string, PivotEntry>();
+
+      filteredRawResults.forEach(r => {
+          if (!studentsMap.has(r.studentId)) {
+              const student = users.find(u => u.id === r.studentId);
+              studentsMap.set(r.studentId, {
+                  name: r.studentName || 'Unknown',
+                  school: student?.school || '-',
+                  scores: {},
+                  lastSubmit: r.submittedAt
+              });
+          }
+          const entry = studentsMap.get(r.studentId)!;
+          entry.scores[r.examTitle || 'Unknown'] = r.score;
+          
+          // Update last submit time if this one is newer
+          if (new Date(r.submittedAt) > new Date(entry.lastSubmit)) {
+              entry.lastSubmit = r.submittedAt;
+          }
+      });
+
+      // 3. Construct Headers
+      // Format: No, Nama, Sekolah, [Subject1], [Subject2], ..., Waktu Submit Terakhir
+      const headers = ["No", "Nama Siswa", "Sekolah", ...uniqueSubjects, "Waktu Submit Terakhir"];
+
+      // 4. Construct Rows
+      let rowIndex = 1;
+      const csvRows = Array.from(studentsMap.values()).map((student: PivotEntry) => {
+          const scoreColumns = uniqueSubjects.map(subject => {
+              const score = student.scores[subject];
+              return score !== undefined ? String(score) : "-";
+          });
+
           return [
-              escapeCSV(r.studentName),
-              escapeCSV(student?.school || '-'),
-              escapeCSV(r.examTitle),
-              String(r.score),
-              new Date(r.submittedAt).toLocaleString()
+              String(rowIndex++),
+              escapeCSV(student.name),
+              escapeCSV(student.school),
+              ...scoreColumns,
+              new Date(student.lastSubmit).toLocaleString()
           ].join(",");
       });
 
-      const blob = new Blob([headers.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.setAttribute('download', `HASIL_UJIAN_${resultSchoolFilter}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      // 5. Generate CSV
+      const blob = new Blob([headers.join(",") + "\n" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+      const fileName = `REKAP_HASIL_PIVOT_${resultSchoolFilter === 'ALL' ? 'SEMUA_SEKOLAH' : resultSchoolFilter}.csv`;
+      
+      const link = document.createElement('a'); 
+      link.href = URL.createObjectURL(blob); 
+      link.setAttribute('download', fileName); 
+      document.body.appendChild(link); 
+      link.click(); 
+      document.body.removeChild(link);
   };
 
   const getMonitoringUsers = (schoolFilter: string) => {
@@ -1293,13 +1343,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                       <button onClick={handleExportResultsExcel} className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-green-700 shadow-sm"><FileSpreadsheet size={16} className="mr-2"/> Export Excel (.csv)</button>
                   </div>
                   
-                  <div className="mb-4 bg-gray-50 p-4 rounded-lg border flex items-center gap-4">
-                      <Filter size={18} className="text-gray-500"/>
-                      <span className="text-sm font-bold text-gray-700">Filter Lembaga:</span>
-                      <select className="border rounded p-2 text-sm min-w-[250px]" value={resultSchoolFilter} onChange={e => setResultSchoolFilter(e.target.value)}>
-                           <option value="ALL">Semua Lembaga/Sekolah</option>
-                           {schools.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                  <div className="mb-4 bg-gray-50 p-4 rounded-lg border flex flex-col md:flex-row items-center gap-4">
+                      {/* Filter Sekolah */}
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                          <Filter size={18} className="text-gray-500"/>
+                          <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Lembaga:</span>
+                          <select className="border rounded p-2 text-sm w-full md:min-w-[250px]" value={resultSchoolFilter} onChange={e => setResultSchoolFilter(e.target.value)}>
+                               <option value="ALL">Semua Lembaga/Sekolah</option>
+                               {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                      </div>
+
+                      {/* Filter Mapel */}
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                          <BookOpen size={18} className="text-gray-500"/>
+                          <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Mapel:</span>
+                          <select className="border rounded p-2 text-sm w-full md:min-w-[250px]" value={resultSubjectFilter} onChange={e => setResultSubjectFilter(e.target.value)}>
+                               <option value="ALL">Semua Mata Pelajaran</option>
+                               {exams.map(ex => <option key={ex.id} value={ex.title}>{ex.title}</option>)}
+                          </select>
+                      </div>
                   </div>
 
                   <div className="overflow-x-auto border rounded">
@@ -1308,9 +1371,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                           <tbody className="divide-y">
                               {results
                                 .filter(r => {
-                                    if(resultSchoolFilter === 'ALL') return true;
-                                    const st = users.find(u => u.id === r.studentId);
-                                    return st?.school === resultSchoolFilter;
+                                    // Check School
+                                    if(resultSchoolFilter !== 'ALL') {
+                                        const st = users.find(u => u.id === r.studentId);
+                                        if (st?.school !== resultSchoolFilter) return false;
+                                    }
+                                    // Check Subject (Mapel)
+                                    if(resultSubjectFilter !== 'ALL' && r.examTitle !== resultSubjectFilter) return false;
+                                    
+                                    return true;
                                 })
                                 .map(r => {
                                   const student = users.find(u => u.id === r.studentId);
