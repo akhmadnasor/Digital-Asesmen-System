@@ -768,7 +768,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
         targetSchools = schools;
     }
 
-    const chartData = targetSchools.map(school => {
+    const chartData: { name: string; notLogin: number; working: number; finished: number }[] = targetSchools.map(school => {
         const schoolStudents = users.filter(u => u.school === school);
         const total = schoolStudents.length;
         const finishedCount = results.filter(r => {
@@ -794,7 +794,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
     const getPoints = (key: 'notLogin' | 'working' | 'finished') => {
         return chartData.map((d, i) => {
             const x = paddingX + (i * (chartAreaWidth / (chartData.length - 1 || 1)));
-            const y = (svgHeight - paddingBottom) - (d[key] / yMax) * chartAreaHeight;
+            const val = d[key];
+            const y = (svgHeight - paddingBottom) - (val / yMax) * chartAreaHeight;
             return `${x},${y}`;
         }).join(' ');
     };

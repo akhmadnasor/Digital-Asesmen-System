@@ -31,14 +31,15 @@ export const db = {
     const cleanInput = input.trim();
     
     // 1. HARDCODED ADMIN CHECK
-    if (cleanInput === 'admin' && password === 'admin') {
+    // UPDATED CREDENTIALS: admin / admin@123
+    if (cleanInput === 'admin' && password === 'admin@123') {
         return {
             id: 'admin-id',
             name: 'Administrator',
             username: 'admin',
             role: UserRole.ADMIN,
             school: 'PUSAT',
-            password: 'admin'
+            password: 'admin@123'
         };
     }
 
