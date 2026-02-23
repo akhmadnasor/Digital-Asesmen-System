@@ -491,6 +491,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
       if (u.isLogin) return { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Mengerjakan' };
       return { color: 'bg-red-100 text-red-700 border-red-200', label: 'Belum Login' };
   };
+
+  const getSubjectStatus = (studentId: string, subjectTitle: string) => {
+      const result = results.find(r => r.studentId === studentId && r.examTitle === subjectTitle);
+      const student = users.find(u => u.id === studentId);
+      const exam = exams.find(e => e.title === subjectTitle);
+      
+      if (result) {
+          return { 
+              label: `Selesai (${result.score})`, 
+              color: 'bg-green-100 text-green-700 border-green-200',
+              canReset: result.score === 0,
+              examId: exam?.id
+          };
+      }
+      
+      if (student?.isLogin && student?.status === 'working') {
+          const today = new Date().toISOString().split('T')[0];
+          const isScheduled = exams.some(e => e.title === subjectTitle && e.examDate === today && e.schoolAccess?.includes(student.school || ''));
+          if (isScheduled) return { 
+              label: 'Mengerjakan', 
+              color: 'bg-blue-100 text-blue-700 border-blue-200',
+              canReset: true,
+              examId: exam?.id
+          };
+      }
+      
+      return { 
+          label: 'Belum', 
+          color: 'bg-gray-100 text-gray-400 border-gray-200',
+          canReset: true,
+          examId: exam?.id
+      };
+  };
+
+  const handleResetSubject = async (studentId: string, subjectTitle: string) => {
+      const exam = exams.find(e => e.title === subjectTitle);
+      if (!exam) return;
+      
+      if (!confirm(`Reset progress/hasil ujian ${subjectTitle} untuk siswa ini?`)) return;
+      
+      setIsLoadingData(true);
+      try {
+          await db.deleteResult(studentId, exam.id);
+          await db.resetUserStatus(studentId);
+          await loadData();
+          alert(`Ujian ${subjectTitle} berhasil di-reset.`);
+      } catch (error) {
+          console.error(error);
+          alert("Gagal reset ujian.");
+      }
+      setIsLoadingData(false);
+  };
   
   // -- BULK ACTION LOGIC --
   const toggleSelectAll = (filteredUsers: User[]) => {
@@ -539,7 +591,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   );
   
   // Monitoring Filtered Users
-  const filteredMonitoringUsers = getMonitoringUsers('ALL').filter(u => u.isLogin);
+  const filteredMonitoringUsers = getMonitoringUsers(selectedSchoolFilter);
 
   // --- Calculate Available Schools for Mapping (Filtering Logic) ---
   const getSchoolsAvailability = () => {
@@ -923,7 +975,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           {activeTab === 'MONITORING' && (
                <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 animate-in fade-in print:hidden">
                    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                       <h3 className="font-bold text-lg flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
+                       <div className="flex items-center gap-4">
+                           <h3 className="font-bold text-lg flex items-center"><Activity size={20} className="mr-2 text-blue-600"/> Live Status Siswa</h3>
+                           <select className="border rounded p-1.5 text-sm min-w-[200px] bg-gray-50" value={selectedSchoolFilter} onChange={e => setSelectedSchoolFilter(e.target.value)}>
+                               <option value="ALL">Semua Sekolah</option>
+                               {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                           </select>
+                       </div>
                        {selectedStudentIds.length > 0 && (
                            <button onClick={handleBulkReset} className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm font-bold flex items-center shadow-md animate-in fade-in hover:bg-orange-600">
                                <Flame size={16} className="mr-1"/> Reset {selectedStudentIds.length} Siswa Terpilih
@@ -931,9 +989,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                        )}
                    </div>
                    <div className="overflow-x-auto border rounded bg-white">
-                       <table className="w-full text-sm text-left">
-                           <thead className="bg-gray-50 font-bold border-b"><tr><th className="p-3 w-10 text-center"><input type="checkbox" className="w-4 h-4 rounded cursor-pointer" checked={filteredMonitoringUsers.length > 0 && selectedStudentIds.length === filteredMonitoringUsers.length} onChange={() => toggleSelectAll(filteredMonitoringUsers)}/></th><th className="p-3">Nama</th><th className="p-3">NISN</th><th className="p-3">Sekolah</th><th className="p-3">Status</th><th className="p-3 text-center">Kontrol</th></tr></thead>
-                           <tbody className="divide-y">{filteredMonitoringUsers.map(u => { const statusInfo = getStudentStatusInfo(u); return (<tr key={u.id} className="hover:bg-gray-50"><td className="p-3 text-center"><input type="checkbox" className="w-4 h-4 rounded cursor-pointer" checked={selectedStudentIds.includes(u.id)} onChange={() => toggleSelectOne(u.id)}/></td><td className="p-3">{u.name}</td><td className="p-3 font-mono">{u.nisn}</td><td className="p-3">{u.school}</td><td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold border ${statusInfo.color}`}>{statusInfo.label}</span></td><td className="p-3 text-center"><button title="Buka Freeze (Reset Status)" onClick={async () => { await db.resetUserStatus(u.id); alert('Status siswa di-reset (Unfreeze).'); loadData(); }} className="text-orange-600 bg-orange-50 border border-orange-200 p-1.5 rounded hover:bg-orange-100 transition"><Flame size={16} /></button></td></tr>)})}{filteredMonitoringUsers.length === 0 && (<tr><td colSpan={6} className="p-4 text-center text-gray-500">Tidak ada siswa yang sedang online.</td></tr>)}</tbody>
+                       <table className="w-full text-sm text-left border-collapse">
+                           <thead className="bg-gray-50 font-bold border-b">
+                               <tr>
+                                   <th rowSpan={2} className="p-3 w-10 text-center align-middle border-r">
+                                       <input type="checkbox" className="w-4 h-4 rounded cursor-pointer" checked={filteredMonitoringUsers.length > 0 && selectedStudentIds.length === filteredMonitoringUsers.length} onChange={() => toggleSelectAll(filteredMonitoringUsers)}/>
+                                   </th>
+                                   <th rowSpan={2} className="p-3 align-middle border-r">Nama</th>
+                                   <th rowSpan={2} className="p-3 align-middle border-r">NISN</th>
+                                   <th rowSpan={2} className="p-3 align-middle border-r">Sekolah</th>
+                                   <th colSpan={3} className="p-2 text-center border-b bg-blue-50 text-blue-800 border-r">Status</th>
+                                   <th rowSpan={2} className="p-3 text-center align-middle">Kontrol</th>
+                               </tr>
+                               <tr>
+                                   <th className="p-2 text-center border-r text-[10px] uppercase bg-blue-50/50 min-w-[100px]">Simulasi</th>
+                                   <th className="p-2 text-center border-r text-[10px] uppercase bg-blue-50/50 min-w-[100px]">Matematika</th>
+                                   <th className="p-2 text-center border-r text-[10px] uppercase bg-blue-50/50 min-w-[100px]">B. Indonesia</th>
+                               </tr>
+                           </thead>
+                           <tbody className="divide-y">
+                               {filteredMonitoringUsers.map(u => { 
+                                   const simStatus = getSubjectStatus(u.id, 'Simulasi');
+                                   const mathStatus = getSubjectStatus(u.id, 'Matematika');
+                                   const indoStatus = getSubjectStatus(u.id, 'Bahasa Indonesia');
+                                   
+                                   return (
+                                       <tr key={u.id} className="hover:bg-gray-50">
+                                           <td className="p-3 text-center border-r">
+                                               <input type="checkbox" className="w-4 h-4 rounded cursor-pointer" checked={selectedStudentIds.includes(u.id)} onChange={() => toggleSelectOne(u.id)}/>
+                                           </td>
+                                           <td className="p-3 border-r font-medium">{u.name}</td>
+                                           <td className="p-3 font-mono border-r text-xs">{u.nisn}</td>
+                                           <td className="p-3 border-r text-xs">{u.school}</td>
+                                           
+                                           <td className="p-2 text-center border-r">
+                                               <div className="flex flex-col items-center gap-1">
+                                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${simStatus.color}`}>{simStatus.label}</span>
+                                                   {simStatus.canReset && (
+                                                       <button onClick={() => handleResetSubject(u.id, 'Simulasi')} className="text-[9px] text-red-600 hover:underline font-bold flex items-center gap-0.5">
+                                                           <RotateCcw size={8}/> Reset
+                                                       </button>
+                                                   )}
+                                               </div>
+                                           </td>
+                                           <td className="p-2 text-center border-r">
+                                               <div className="flex flex-col items-center gap-1">
+                                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${mathStatus.color}`}>{mathStatus.label}</span>
+                                                   {mathStatus.canReset && (
+                                                       <button onClick={() => handleResetSubject(u.id, 'Matematika')} className="text-[9px] text-red-600 hover:underline font-bold flex items-center gap-0.5">
+                                                           <RotateCcw size={8}/> Reset
+                                                       </button>
+                                                   )}
+                                               </div>
+                                           </td>
+                                           <td className="p-2 text-center border-r">
+                                               <div className="flex flex-col items-center gap-1">
+                                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${indoStatus.color}`}>{indoStatus.label}</span>
+                                                   {indoStatus.canReset && (
+                                                       <button onClick={() => handleResetSubject(u.id, 'Bahasa Indonesia')} className="text-[9px] text-red-600 hover:underline font-bold flex items-center gap-0.5">
+                                                           <RotateCcw size={8}/> Reset
+                                                       </button>
+                                                   )}
+                                               </div>
+                                           </td>
+                                           
+                                           <td className="p-3 text-center">
+                                               <button title="Buka Freeze (Reset Status)" onClick={async () => { await db.resetUserStatus(u.id); alert('Status siswa di-reset (Unfreeze).'); loadData(); }} className="text-orange-600 bg-orange-50 border border-orange-200 p-1.5 rounded hover:bg-orange-100 transition">
+                                                   <Flame size={16} />
+                                               </button>
+                                           </td>
+                                       </tr>
+                                   )
+                               })}
+                               {filteredMonitoringUsers.length === 0 && (
+                                   <tr>
+                                       <td colSpan={8} className="p-8 text-center text-gray-500 italic">Tidak ada siswa yang sedang online atau sesuai filter.</td>
+                                   </tr>
+                               )}
+                           </tbody>
                        </table>
                    </div>
                </div>

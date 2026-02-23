@@ -319,5 +319,9 @@ export const db = {
 
   resetUserPassword: async (userId: string): Promise<void> => {
     await supabase.from('students').update({ password: '12345' }).eq('id', userId);
+  },
+
+  deleteResult: async (studentId: string, examId: string): Promise<void> => {
+    await supabase.from('results').delete().eq('student_id', studentId).eq('subject_id', examId);
   }
 };
