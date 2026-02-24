@@ -69,6 +69,8 @@ type PivotRow = {
     school: string; 
     scores: {[key: string]: number}; 
     lastSubmit: string; 
+    averageScore: number;
+    rank: number;
 };
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, appName, onSettingsChange, themeColor, settings }) => {
@@ -123,6 +125,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   const [dashboardSchoolFilter, setDashboardSchoolFilter] = useState<string>('ALL'); // For Dashboard Details
   const [resultSchoolFilter, setResultSchoolFilter] = useState<string>('ALL'); // For Results
   const [resultSubjectFilter, setResultSubjectFilter] = useState<string>('ALL'); // For Results - Subject
+  const [resultSortSubject, setResultSortSubject] = useState<string>('AVERAGE'); // AVERAGE or subject name
   const [cardSchoolFilter, setCardSchoolFilter] = useState<string>('ALL'); // For Cards
   const [monitoringSearch, setMonitoringSearch] = useState<string>('');
   const [printDate, setPrintDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
@@ -176,7 +179,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
                   name: r.studentName || 'Unknown',
                   school: student?.school || '-',
                   scores: {},
-                  lastSubmit: r.submittedAt
+                  lastSubmit: r.submittedAt,
+                  averageScore: 0,
+                  rank: 0
               });
           }
           const entry = map.get(r.studentId)!;
@@ -187,13 +192,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           }
       });
 
-      const rows = (Array.from(map.values()) as PivotRow[]).sort((a, b) => {
-          if (a.school !== b.school) return a.school.localeCompare(b.school);
-          return a.name.localeCompare(b.name);
+      let rows = Array.from(map.values()) as PivotRow[];
+      
+      // Calculate average score for each row
+      rows.forEach(row => {
+          const mathScore = row.scores['Matematika'] || 0;
+          const indoScore = row.scores['Bahasa Indonesia'] || 0;
+          row.averageScore = (mathScore + indoScore) / 2;
+      });
+
+      // Sort rows
+      rows.sort((a, b) => {
+          if (resultSortSubject === 'AVERAGE') {
+              if (b.averageScore !== a.averageScore) {
+                  return b.averageScore - a.averageScore;
+              }
+          } else {
+              const scoreA = a.scores[resultSortSubject] || 0;
+              const scoreB = b.scores[resultSortSubject] || 0;
+              if (scoreB !== scoreA) {
+                  return scoreB - scoreA;
+              }
+          }
+          // Tie-breaker: fastest submit time
+          return new Date(a.lastSubmit).getTime() - new Date(b.lastSubmit).getTime();
+      });
+
+      // Assign ranks
+      rows.forEach((row, index) => {
+          row.rank = index + 1;
       });
 
       return { pivotRows: rows, uniqueSubjects: subjects };
-  }, [results, users, resultSchoolFilter, resultSubjectFilter]);
+  }, [results, users, resultSchoolFilter, resultSubjectFilter, resultSortSubject]);
 
   // --- ACTIONS ---
   const handleSaveAntiCheat = async () => {
@@ -418,52 +449,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
   };
 
   const handleExportResultsExcel = () => {
-      // Reuse the same pivot logic but calculated on-demand for download
-      const filteredRawResults = results.filter(r => {
-          if (resultSchoolFilter !== 'ALL') {
-              const student = users.find(u => u.id === r.studentId);
-              if (student?.school !== resultSchoolFilter) return false;
-          }
-          if (resultSubjectFilter !== 'ALL' && r.examTitle !== resultSubjectFilter) return false;
-          return true;
-      });
+      if (pivotRows.length === 0) return alert("Tidak ada data untuk diexport");
 
-      if (filteredRawResults.length === 0) return alert("Tidak ada data untuk diexport");
-
-      const uniqueSubjects = Array.from(new Set(filteredRawResults.map(r => r.examTitle || 'Unknown'))).sort();
-      type PivotEntry = { name: string, school: string, scores: {[key: string]: number}, lastSubmit: string };
-      const studentsMap = new Map<string, PivotEntry>();
-
-      filteredRawResults.forEach(r => {
-          if (!studentsMap.has(r.studentId)) {
-              const student = users.find(u => u.id === r.studentId);
-              studentsMap.set(r.studentId, {
-                  name: r.studentName || 'Unknown',
-                  school: student?.school || '-',
-                  scores: {},
-                  lastSubmit: r.submittedAt
-              });
-          }
-          const entry = studentsMap.get(r.studentId)!;
-          entry.scores[r.examTitle || 'Unknown'] = r.score;
-          if (new Date(r.submittedAt) > new Date(entry.lastSubmit)) {
-              entry.lastSubmit = r.submittedAt;
-          }
-      });
-
-      const headers = ["No", "Nama Siswa", "Sekolah", ...uniqueSubjects, "Waktu Submit Terakhir"];
-      let rowIndex = 1;
-      const csvRows = Array.from(studentsMap.values()).map((student: PivotEntry) => {
+      const headers = ["No", "Nama Siswa", "Sekolah", ...uniqueSubjects, "Rata-rata", "Waktu Submit Terakhir", "Peringkat"];
+      
+      const csvRows = pivotRows.map((row, index) => {
           const scoreColumns = uniqueSubjects.map(subject => {
-              const score = student.scores[subject];
+              const score = row.scores[subject];
               return score !== undefined ? String(score) : "-";
           });
           return [
-              String(rowIndex++),
-              escapeCSV(student.name),
-              escapeCSV(student.school),
+              String(index + 1),
+              escapeCSV(row.name),
+              escapeCSV(row.school),
               ...scoreColumns,
-              new Date(student.lastSubmit).toLocaleString()
+              row.averageScore.toFixed(2),
+              new Date(row.lastSubmit).toLocaleString('id-ID', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any),
+              String(row.rank)
           ].join(",");
       });
 
@@ -1075,15 +1077,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, 
           {activeTab === 'HASIL_UJIAN' && (
               <div className="bg-white rounded-xl shadow-sm border p-6 animate-in fade-in print:hidden">
                   <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-lg">Rekap Hasil Ujian</h3><button onClick={handleExportResultsExcel} className="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm flex items-center hover:bg-green-700 shadow-sm"><FileSpreadsheet size={16} className="mr-2"/> Export Excel (.csv)</button></div>
-                  <div className="mb-4 bg-gray-50 p-4 rounded-lg border flex flex-col md:flex-row items-center gap-4"><div className="flex items-center gap-2 w-full md:w-auto"><Filter size={18} className="text-gray-500"/><span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Lembaga:</span><select className="border rounded p-2 text-sm w-full md:min-w-[250px]" value={resultSchoolFilter} onChange={e => setResultSchoolFilter(e.target.value)}><option value="ALL">Semua Lembaga/Sekolah</option>{schools.map(s => <option key={s} value={s}>{s}</option>)}</select></div><div className="flex items-center gap-2 w-full md:w-auto"><BookOpen size={18} className="text-gray-500"/><span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Mapel:</span><select className="border rounded p-2 text-sm w-full md:min-w-[250px]" value={resultSubjectFilter} onChange={e => setResultSubjectFilter(e.target.value)}><option value="ALL">Semua Mata Pelajaran</option>{exams.map(ex => <option key={ex.id} value={ex.title}>{ex.title}</option>)}</select></div></div>
+                  <div className="mb-4 bg-gray-50 p-4 rounded-lg border flex flex-col md:flex-row items-center gap-4 flex-wrap">
+                      <div className="flex items-center gap-2 w-full md:w-auto"><Filter size={18} className="text-gray-500"/><span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Lembaga:</span><select className="border rounded p-2 text-sm w-full md:min-w-[200px]" value={resultSchoolFilter} onChange={e => setResultSchoolFilter(e.target.value)}><option value="ALL">Semua Lembaga/Sekolah</option>{schools.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                      <div className="flex items-center gap-2 w-full md:w-auto"><BookOpen size={18} className="text-gray-500"/><span className="text-sm font-bold text-gray-700 whitespace-nowrap">Filter Mapel:</span><select className="border rounded p-2 text-sm w-full md:min-w-[200px]" value={resultSubjectFilter} onChange={e => setResultSubjectFilter(e.target.value)}><option value="ALL">Semua Mata Pelajaran</option>{exams.map(ex => <option key={ex.id} value={ex.title}>{ex.title}</option>)}</select></div>
+                      <div className="flex items-center gap-2 w-full md:w-auto"><span className="text-sm font-bold text-gray-700 whitespace-nowrap">Urutkan Berdasarkan:</span><select className="border rounded p-2 text-sm w-full md:min-w-[200px]" value={resultSortSubject} onChange={e => setResultSortSubject(e.target.value)}><option value="AVERAGE">Rata-rata</option>{uniqueSubjects.map(sub => <option key={sub} value={sub}>Nilai {sub}</option>)}</select></div>
+                  </div>
                   <div className="overflow-x-auto border rounded bg-white">
                       <table className="w-full text-sm text-left border-collapse">
                           <thead className="bg-gray-100 font-bold text-gray-700 border-b-2 border-gray-200">
-                              <tr><th rowSpan={2} className="p-3 border-r w-12 text-center align-middle">No</th><th rowSpan={2} className="p-3 border-r align-middle min-w-[200px]">Nama Siswa</th><th rowSpan={2} className="p-3 border-r align-middle min-w-[150px]">Sekolah</th>{uniqueSubjects.length > 0 && (<th colSpan={uniqueSubjects.length} className="p-2 text-center border-b bg-blue-50 text-blue-800">Mata Pelajaran</th>)}<th rowSpan={2} className="p-3 align-middle text-center min-w-[150px]">Waktu Submit</th></tr>
+                              <tr><th rowSpan={2} className="p-3 border-r w-12 text-center align-middle">No</th><th rowSpan={2} className="p-3 border-r align-middle min-w-[200px]">Nama Siswa</th><th rowSpan={2} className="p-3 border-r align-middle min-w-[150px]">Sekolah</th>{uniqueSubjects.length > 0 && (<th colSpan={uniqueSubjects.length} className="p-2 text-center border-b bg-blue-50 text-blue-800">Mata Pelajaran</th>)}<th rowSpan={2} className="p-3 align-middle text-center border-l min-w-[100px]">Rata-rata</th><th rowSpan={2} className="p-3 align-middle text-center border-l min-w-[150px]">Waktu Submit</th><th rowSpan={2} className="p-3 align-middle text-center border-l min-w-[100px]">Peringkat</th></tr>
                               {uniqueSubjects.length > 0 && (<tr>{uniqueSubjects.map(sub => (<th key={sub} className="p-2 text-center border-r border-gray-200 text-xs uppercase tracking-wider bg-blue-50/50 min-w-[100px]">{sub}</th>))}</tr>)}
                           </thead>
                           <tbody className="divide-y">
-                              {pivotRows.length === 0 ? (<tr><td colSpan={4 + uniqueSubjects.length} className="p-8 text-center text-gray-400 italic">Belum ada data ujian.</td></tr>) : (pivotRows.map((row, idx) => (<tr key={row.studentId} className="hover:bg-gray-50 transition"><td className="p-3 text-center text-gray-500 border-r">{idx + 1}</td><td className="p-3 font-bold text-gray-800 border-r">{row.name}</td><td className="p-3 text-gray-600 border-r">{row.school}</td>{uniqueSubjects.map(sub => { const score = row.scores[sub]; return (<td key={sub} className="p-3 text-center font-mono border-r bg-gray-50/30">{score !== undefined ? (<span className={`font-bold ${score >= 70 ? 'text-blue-600' : 'text-orange-600'}`}>{score}</span>) : (<span className="text-gray-300 text-xs">-</span>)}</td>); })}<td className="p-3 text-center text-xs text-gray-500">{new Date(row.lastSubmit).toLocaleString('id-ID')}</td></tr>)))}
+                              {pivotRows.length === 0 ? (<tr><td colSpan={7 + uniqueSubjects.length} className="p-8 text-center text-gray-400 italic">Belum ada data ujian.</td></tr>) : (pivotRows.map((row, idx) => (<tr key={row.studentId} className="hover:bg-gray-50 transition"><td className="p-3 text-center text-gray-500 border-r">{idx + 1}</td><td className="p-3 font-bold text-gray-800 border-r">{row.name}</td><td className="p-3 text-gray-600 border-r">{row.school}</td>{uniqueSubjects.map(sub => { const score = row.scores[sub]; return (<td key={sub} className="p-3 text-center font-mono border-r bg-gray-50/30">{score !== undefined ? (<span className={`font-bold ${score >= 70 ? 'text-blue-600' : 'text-orange-600'}`}>{score}</span>) : (<span className="text-gray-300 text-xs">-</span>)}</td>); })}<td className="p-3 text-center font-bold text-gray-800 border-l">{row.averageScore.toFixed(2)}</td><td className="p-3 text-center text-xs text-gray-500 border-l">{new Date(row.lastSubmit).toLocaleString('id-ID', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 } as any)}</td><td className="p-3 text-center font-bold text-blue-600 text-lg border-l">#{row.rank}</td></tr>)))}
                           </tbody>
                       </table>
                   </div>
